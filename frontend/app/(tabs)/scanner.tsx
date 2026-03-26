@@ -5,11 +5,12 @@ import {
   StyleSheet,
   SafeAreaView,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
   Alert,
   ScrollView,
+  Dimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,13 +18,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../../src/theme/colors';
 import { GoldButton, GoldOutlineButton } from '../../src/components/GoldButton';
 import { DarkCard } from '../../src/components/DarkCard';
+import IMAGES from '../../src/constants/images';
 import * as api from '../../src/services/api';
 
+const { width } = Dimensions.get('window');
+
 const SCAN_TIPS = [
-  'Тримайте камеру нерухомо',
-  'Забезпечте хороше освітлення',
-  'Уникайте відблисків',
-  'Тримайте етикетку в центрі',
+  'Hold camera steady for best results',
+  'Ensure good lighting conditions',
+  'Avoid reflections on glass',
+  'Keep the label centered in frame',
 ];
 
 export default function ScannerScreen() {
@@ -57,7 +61,7 @@ export default function ScannerScreen() {
         : await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (!permissionResult.granted) {
-        Alert.alert('Помилка', 'Потрібен дозвіл на доступ');
+        Alert.alert('Error', 'Permission is required');
         return;
       }
 
@@ -78,7 +82,7 @@ export default function ScannerScreen() {
       }
     } catch (error) {
       console.error('Image picker error:', error);
-      Alert.alert('Помилка', 'Не вдалося вибрати фото');
+      Alert.alert('Error', 'Failed to select photo');
     }
   };
 
@@ -90,7 +94,7 @@ export default function ScannerScreen() {
       const userId = await AsyncStorage.getItem('userId');
       
       if (!userId) {
-        Alert.alert('Помилка', 'Користувача не знайдено');
+        Alert.alert('Error', 'User not found');
         return;
       }
 
@@ -113,7 +117,7 @@ export default function ScannerScreen() {
       });
     } catch (error) {
       console.error('Analysis error:', error);
-      Alert.alert('Помилка', 'Не вдалося проаналізувати фото. Спробуйте ще раз.');
+      Alert.alert('Error', 'Failed to analyze. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -126,14 +130,17 @@ export default function ScannerScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={Colors.textSecondary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Сканування полиці</Text>
+        <Text style={styles.headerTitle}>SHELF SCANNER</Text>
         <View style={{ width: 24 }} />
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Budget display */}
         <View style={styles.budgetSection}>
-          <Text style={styles.budgetLabel}>БЮДЖЕТ</Text>
+          <View>
+            <Text style={styles.budgetLabel}>CURRENT BUDGET</Text>
+            <Text style={styles.budgetSubtext}>Find bottles within your range</Text>
+          </View>
           <Text style={styles.budgetValue}>
             {budget} {currency}
           </Text>
@@ -145,17 +152,28 @@ export default function ScannerScreen() {
             <Image
               source={{ uri: `data:image/jpeg;base64,${image}` }}
               style={styles.previewImage}
-              resizeMode="cover"
+              contentFit="cover"
             />
           ) : (
             <View style={styles.placeholderContainer}>
-              <Ionicons
-                name="image-outline"
-                size={60}
-                color={Colors.goldTransparent40}
+              {/* Background wine shelf image */}
+              <Image
+                source={{ uri: IMAGES.wineShelf }}
+                style={styles.placeholderImage}
+                contentFit="cover"
               />
+              <View style={styles.placeholderOverlay} />
+              
+              {/* Scanning target overlay */}
+              <View style={styles.scanTarget}>
+                <View style={styles.scanCrosshair}>
+                  <View style={[styles.scanLine, styles.scanLineH]} />
+                  <View style={[styles.scanLine, styles.scanLineV]} />
+                </View>
+              </View>
+              
               <Text style={styles.placeholderText}>
-                Торкніться, щоб обрати фото
+                Point camera at wine shelf
               </Text>
             </View>
           )}
@@ -171,13 +189,13 @@ export default function ScannerScreen() {
         {!image ? (
           <View style={styles.actionButtons}>
             <GoldOutlineButton
-              label="Галерея"
+              label="Gallery"
               icon="images-outline"
               onPress={() => pickImage(false)}
               style={styles.actionButton}
             />
             <GoldOutlineButton
-              label="Камера"
+              label="Camera"
               icon="camera-outline"
               onPress={() => pickImage(true)}
               style={styles.actionButton}
@@ -186,7 +204,7 @@ export default function ScannerScreen() {
         ) : (
           <View style={styles.analyzeButtons}>
             <GoldButton
-              label={isAnalyzing ? 'Аналіз...' : 'Проаналізувати'}
+              label={isAnalyzing ? 'Analyzing...' : 'Analyze Shelf'}
               icon="sparkles"
               onPress={analyzeShelf}
               loading={isAnalyzing}
@@ -195,7 +213,7 @@ export default function ScannerScreen() {
               style={styles.resetButton}
               onPress={() => setImage(null)}
             >
-              <Text style={styles.resetText}>Скинути</Text>
+              <Text style={styles.resetText}>Reset</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -204,7 +222,7 @@ export default function ScannerScreen() {
         <DarkCard style={styles.tipsCard}>
           <View style={styles.tipsHeader}>
             <Ionicons name="information-circle-outline" size={16} color={Colors.gold} />
-            <Text style={styles.tipsTitle}>ПРОТОКОЛ СКАНУВАННЯ</Text>
+            <Text style={styles.tipsTitle}>SCANNING PROTOCOL</Text>
           </View>
           {SCAN_TIPS.map((tip, index) => (
             <View key={index} style={styles.tipRow}>
@@ -230,10 +248,10 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     color: Colors.textPrimary,
-    fontFamily: 'Georgia',
+    letterSpacing: 2,
   },
   content: {
     flex: 1,
@@ -244,9 +262,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
-    padding: 12,
+    padding: 14,
     backgroundColor: Colors.surfaceElevated,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   budgetLabel: {
     fontSize: 11,
@@ -254,10 +274,16 @@ const styles = StyleSheet.create({
     color: Colors.gold,
     letterSpacing: 1.5,
   },
+  budgetSubtext: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
   budgetValue: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     color: Colors.gold,
+    fontFamily: 'Georgia',
   },
   previewContainer: {
     aspectRatio: 3 / 4,
@@ -273,12 +299,49 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   placeholderContainer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
     alignItems: 'center',
   },
+  placeholderImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  placeholderOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+  },
+  scanTarget: {
+    width: 60,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  scanCrosshair: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scanLine: {
+    position: 'absolute',
+    backgroundColor: Colors.gold,
+  },
+  scanLineH: {
+    width: 40,
+    height: 1.5,
+  },
+  scanLineV: {
+    width: 1.5,
+    height: 40,
+  },
   placeholderText: {
-    marginTop: 12,
     fontSize: 14,
-    color: Colors.textMuted,
+    color: Colors.textSecondary,
+    zIndex: 1,
+    fontWeight: '500',
   },
   corner: {
     position: 'absolute',

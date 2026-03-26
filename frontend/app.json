@@ -57,7 +57,8 @@
         {
           "microphonePermission": "Allow CHEFLY to use your microphone for voice commands"
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

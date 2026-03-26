@@ -500,88 +500,96 @@ async def scan_bottle(user_id: str, image_base64: str, language: str = "UK"):
         logger.error(f"Bottle scan error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# ==================== TTS ROUTE ====================
+# ==================== TTS ROUTE - GOOGLE CLOUD WAVENET ====================
 
 class TTSRequest(BaseModel):
     text: str
     language: str = "uk-UA"
-    voice_name: Optional[str] = None  # e.g., "uk-UA-Neural2-A"
-    pitch: float = 1.1
-    speaking_rate: float = 1.05
+    voice_name: Optional[str] = None  # e.g., "uk-UA-Wavenet-A"
 
 @api_router.post("/tts/synthesize")
 async def synthesize_speech(request: TTSRequest):
     """
-    Text-to-Speech using Google Cloud TTS Neural2 voices.
-    Falls back to basic response if Google TTS not configured.
+    Text-to-Speech using Google Cloud TTS Wavenet voices.
+    Returns MP3 audio as base64 for natural, human-like voice.
+    Falls back to client-side TTS if Google API not enabled.
     """
     try:
         import httpx
         
-        # Google Cloud TTS API key (if configured)
         GOOGLE_API_KEY = os.environ.get('GOOGLE_CLOUD_API_KEY', '')
         
         if not GOOGLE_API_KEY:
-            # Return parameters for client-side TTS
+            logger.warning("Google Cloud API key not configured, using client TTS")
             return {
                 "audio_base64": None,
                 "use_client_tts": True,
                 "text": request.text,
                 "language": request.language,
-                "pitch": request.pitch,
-                "speaking_rate": request.speaking_rate,
-                "message": "Google TTS not configured, use client-side TTS"
+                "success": False
             }
         
-        # Select Neural2 voice based on language
+        # Wavenet voices for natural human-like sound
         voice_map = {
-            "uk-UA": "uk-UA-Neural2-A",  # Ukrainian female
-            "en-US": "en-US-Neural2-F",  # English female (friendly)
-            "en-GB": "en-GB-Neural2-A",  # British English female
-            "ru-RU": "ru-RU-Neural2-A",  # Russian female
+            "uk-UA": "uk-UA-Wavenet-A",   # Ukrainian female (natural)
+            "en-US": "en-US-Wavenet-F",   # English female (friendly)
+            "en-GB": "en-GB-Wavenet-A",   # British English female
+            "ru-RU": "ru-RU-Wavenet-A",   # Russian female
         }
         
-        voice_name = request.voice_name or voice_map.get(request.language, "en-US-Neural2-F")
+        voice_name = request.voice_name or voice_map.get(request.language, "en-US-Wavenet-F")
+        
+        # Clean text for TTS
+        clean_text = request.text
+        clean_text = clean_text.replace('**', '').replace('*', '')
+        clean_text = clean_text.replace('#', '').replace('•', '')
+        clean_text = clean_text.replace('\n\n', '. ').replace('\n', ', ')
+        import re
+        clean_text = re.sub(r'[🍷🌡🍽⭐✨💫🎤🔊🥂🍾🍇🍎📷]', '', clean_text)
+        clean_text = clean_text[:600]
         
         # Google Cloud TTS API endpoint
         url = f"https://texttospeech.googleapis.com/v1/text:synthesize?key={GOOGLE_API_KEY}"
         
         payload = {
-            "input": {"text": request.text},
+            "input": {"text": clean_text},
             "voice": {
                 "languageCode": request.language,
                 "name": voice_name,
             },
             "audioConfig": {
                 "audioEncoding": "MP3",
-                "pitch": (request.pitch - 1) * 20,  # Convert to semitones (-20 to 20)
-                "speakingRate": request.speaking_rate,
-                "effectsProfileId": ["small-bluetooth-speaker-class-device"]
+                "pitch": 0,
+                "speakingRate": 1.0,
             }
         }
+        
+        logger.info(f"TTS request: voice={voice_name}, text_len={len(clean_text)}")
         
         async with httpx.AsyncClient() as client:
             response = await client.post(url, json=payload, timeout=30)
             
             if response.status_code == 200:
                 data = response.json()
+                audio_base64 = data.get("audioContent")
+                logger.info(f"TTS success: {len(audio_base64)} bytes")
                 return {
-                    "audio_base64": data.get("audioContent"),
-                    "use_client_tts": False,
+                    "audio_base64": audio_base64,
                     "format": "mp3",
                     "voice": voice_name,
-                    "language": request.language
+                    "language": request.language,
+                    "success": True,
+                    "use_client_tts": False
                 }
             else:
-                logger.error(f"Google TTS error: {response.text}")
+                # Fallback to client-side TTS
+                logger.warning(f"Google TTS failed ({response.status_code}), using client TTS")
                 return {
                     "audio_base64": None,
                     "use_client_tts": True,
-                    "text": request.text,
+                    "text": clean_text,
                     "language": request.language,
-                    "pitch": request.pitch,
-                    "speaking_rate": request.speaking_rate,
-                    "error": "Google TTS failed, use client-side"
+                    "success": False
                 }
                 
     except Exception as e:
@@ -591,8 +599,7 @@ async def synthesize_speech(request: TTSRequest):
             "use_client_tts": True,
             "text": request.text,
             "language": request.language,
-            "pitch": request.pitch,
-            "speaking_rate": request.speaking_rate,
+            "success": False,
             "error": str(e)
         }
 

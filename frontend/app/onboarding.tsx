@@ -6,7 +6,9 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  Dimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,7 +16,10 @@ import Colors from '../src/theme/colors';
 import { CheflyLogo } from '../src/components/CheflyLogo';
 import { GoldButton } from '../src/components/GoldButton';
 import { DarkCard } from '../src/components/DarkCard';
+import IMAGES from '../src/constants/images';
 import * as api from '../src/services/api';
+
+const { width } = Dimensions.get('window');
 
 const CURRENCIES = [
   { code: 'USD', symbol: '$', name: 'US Dollar' },
@@ -77,16 +82,27 @@ export default function OnboardingScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Logo */}
-        <View style={styles.logoSection}>
-          <CheflyLogo size={80} glowing />
-          <Text style={styles.appName}>CHEFLY</Text>
-          <Text style={styles.tagline}>YOUR PREMIUM AI CONCIERGE</Text>
+        {/* Hero Image Section */}
+        <View style={styles.heroSection}>
+          <Image
+            source={{ uri: IMAGES.onboardingHero }}
+            style={styles.heroImage}
+            contentFit="cover"
+          />
+          <View style={styles.heroOverlay} />
+          <View style={styles.heroOverlayBottom} />
+          
+          {/* Logo over the image */}
+          <View style={styles.logoOverImage}>
+            <CheflyLogo size={70} glowing />
+            <Text style={styles.appName}>CHEFLY</Text>
+            <Text style={styles.tagline}>YOUR AI CONCIERGE</Text>
+          </View>
         </View>
 
         {/* Welcome text */}
         <View style={styles.welcomeSection}>
-          <Text style={styles.welcomeTitle}>Welcome to the Elite Club</Text>
+          <Text style={styles.welcomeTitle}>Welcome to the Elite Circle</Text>
           <Text style={styles.welcomeSubtitle}>
             I am your personal sommelier. To provide the most exquisite recommendations, let's tailor your experience.
           </Text>
@@ -218,20 +234,43 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.black,
   },
   scrollContent: {
-    padding: 20,
     paddingBottom: 40,
   },
-  logoSection: {
+  heroSection: {
+    width: '100%',
+    height: 280,
+    marginBottom: 24,
+    position: 'relative',
+  },
+  heroImage: {
+    width: '100%',
+    height: '100%',
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+  },
+  heroOverlayBottom: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 120,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  logoOverImage: {
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 30,
   },
   appName: {
     fontSize: 28,
     fontWeight: '800',
     color: Colors.gold,
     letterSpacing: 6,
-    marginTop: 16,
+    marginTop: 12,
     fontFamily: 'Georgia',
   },
   tagline: {
@@ -242,6 +281,7 @@ const styles = StyleSheet.create({
   },
   welcomeSection: {
     alignItems: 'center',
+    paddingHorizontal: 20,
     marginBottom: 30,
   },
   welcomeTitle: {
@@ -259,6 +299,7 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: 24,
+    paddingHorizontal: 20,
   },
   sectionTitle: {
     fontSize: 11,
@@ -381,6 +422,7 @@ const styles = StyleSheet.create({
   buttonSection: {
     marginTop: 10,
     alignItems: 'center',
+    paddingHorizontal: 20,
   },
   termsText: {
     fontSize: 12,

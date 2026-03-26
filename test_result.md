@@ -195,18 +195,42 @@ backend:
           agent: "testing"
           comment: "✅ PASS - Get chat sessions endpoint working correctly, returns list of user sessions with proper metadata"
 
-frontend:
-  - task: "Frontend Integration"
-    implemented: false
-    working: "NA"
-    file: "/app/frontend/src/App.js"
+  - task: "TTS Synthesize Endpoint"
+    implemented: true
+    working: false
+    file: "/app/backend/server.py"
     stuck_count: 0
-    priority: "low"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: false
+          agent: "main"
+          comment: "Google Cloud TTS API returns 403 - API not enabled in user's GCP project. Fallback to expo-speech is working."
+
+frontend:
+  - task: "Premium Wine Images on All Screens"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/index.tsx, onboarding.tsx, premium.tsx, (tabs)/profile.tsx, (tabs)/history.tsx, (tabs)/scanner.tsx, scan-result.tsx"
+    stuck_count: 0
+    priority: "high"
     needs_retesting: false
     status_history:
-        - working: "NA"
-          agent: "testing"
-          comment: "Frontend testing not required for this task"
+        - working: true
+          agent: "main"
+          comment: "Added premium wine imagery to all screens matching reference design. Splash has wine cellar background, Onboarding has hero wine image, Scanner has wine shelf placeholder, Profile has gold-bordered avatar, History has wine thumbnails, Premium paywall has bottle imagery."
+
+  - task: "TTS Fallback to expo-speech"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/(tabs)/chat.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Added fallback from Google TTS to expo-speech when backend returns use_client_tts=true or fails"
 
 metadata:
   created_by: "testing_agent"

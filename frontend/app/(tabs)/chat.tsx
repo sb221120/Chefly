@@ -16,14 +16,14 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import * as Speech from 'expo-speech';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../../src/theme/colors';
 import * as api from '../../src/services/api';
 
 // ============================================
-// 🎭 AI ORCHESTRATOR - Voice-to-Voice System
+// 🎭 VOICE-TO-VOICE AI SOMMELIER
+// Using Google Cloud TTS Wavenet for human-like voice
 // ============================================
 
 interface Message {
@@ -34,32 +34,11 @@ interface Message {
   isVoice?: boolean;
 }
 
-// ============================================
-// 🔊 NATURAL TTS CONFIGURATION
-// ============================================
-const TTS_CONFIG = {
-  // Voice settings for natural, friendly tone (like Alisa)
-  pitch: 1.1,           // Slightly higher - more emotional
-  rate: 1.08,           // Slightly faster - more natural
-  pauseBeforeMs: 350,   // "Taking breath" pause before speaking
-  
-  // Language-specific rates (some languages need adjustment)
-  languageRates: {
-    'uk-UA': 1.05,      // Ukrainian sounds better slightly slower
-    'ru-RU': 1.08,      // Russian natural pace
-    'en-US': 1.1,       // English slightly faster
-    'en-GB': 1.05,      // British English more measured
-  } as Record<string, number>,
-};
-
-// Sommelier prompt for concise, warm responses
-const SOMMELIER_PROMPT = `Ти — елітний сомельє-консьєрж. 
-Твоя відповідь має бути КОРОТКОЮ (2-3 речення), теплою та професійною.
-Відповідай тією ж мовою, якою до тебе звернулися.
-Говори природно, ніби в живій розмові.`;
+// Elite sommelier prompt
+const SOMMELIER_PROMPT = `Ти — елітний сомельє. Відповідай КОРОТКО (2-3 речення), тепло, з людськими інтонаціями. Відповідай тією мовою, якою запитали.`;
 
 // ============================================
-// 🎤 Web Speech Recognition Hook
+// 🎤 Web Speech Recognition
 // ============================================
 const useWebSpeechRecognition = () => {
   const [isListening, setIsListening] = useState(false);
@@ -119,16 +98,14 @@ const useWebSpeechRecognition = () => {
       setInterimTranscript('');
       setIsFinal(false);
       
-      const langMap: Record<string, string> = {
-        'UK': 'uk-UA', 'EN': 'en-US', 'RU': 'ru-RU',
-      };
+      const langMap: Record<string, string> = { 'UK': 'uk-UA', 'EN': 'en-US', 'RU': 'ru-RU' };
       recognitionRef.current.lang = langMap[language] || language;
       
       try {
         recognitionRef.current.start();
         setIsListening(true);
       } catch (error) {
-        console.error('Failed to start recognition:', error);
+        console.error('Speech recognition start failed');
       }
     }
   }, [isSupported]);
@@ -140,30 +117,78 @@ const useWebSpeechRecognition = () => {
   }, [isListening]);
 
   return {
-    isListening,
-    transcript,
-    interimTranscript,
-    isFinal,
-    isSupported,
-    startListening,
-    stopListening,
-    reset: () => {
-      setTranscript('');
-      setInterimTranscript('');
-      setIsFinal(false);
-    },
+    isListening, transcript, interimTranscript, isFinal, isSupported,
+    startListening, stopListening,
+    reset: () => { setTranscript(''); setInterimTranscript(''); setIsFinal(false); },
   };
+};
+
+// ============================================
+// 🔊 Google Cloud TTS Audio Player
+// ============================================
+const useGoogleTTS = () => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const soundRef = useRef<Audio.Sound | null>(null);
+
+  const playAudio = async (audioBase64: string): Promise<void> => {
+    return new Promise(async (resolve) => {
+      try {
+        // Cleanup previous sound
+        if (soundRef.current) {
+          await soundRef.current.unloadAsync();
+          soundRef.current = null;
+        }
+
+        // Configure audio mode
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: true,
+        });
+
+        // Create and play sound from base64
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: `data:audio/mp3;base64,${audioBase64}` },
+          { shouldPlay: true, volume: 1.0 }
+        );
+
+        soundRef.current = sound;
+        setIsPlaying(true);
+
+        // Listen for playback completion
+        sound.setOnPlaybackStatusUpdate((status) => {
+          if (status.isLoaded && status.didJustFinish) {
+            setIsPlaying(false);
+            resolve();
+          }
+        });
+
+      } catch (error) {
+        console.error('Audio playback error:', error);
+        setIsPlaying(false);
+        resolve();
+      }
+    });
+  };
+
+  const stopAudio = async () => {
+    if (soundRef.current) {
+      await soundRef.current.stopAsync();
+      await soundRef.current.unloadAsync();
+      soundRef.current = null;
+    }
+    setIsPlaying(false);
+  };
+
+  return { isPlaying, playAudio, stopAudio };
 };
 
 // ============================================
 // 🎵 Animated Voice Button
 // ============================================
 const VoiceButton = ({ 
-  isRecording, 
-  isProcessing,
-  isSpeaking,
-  onPress,
-  disabled 
+  isRecording, isProcessing, isSpeaking, onPress, disabled 
 }: { 
   isRecording: boolean;
   isProcessing: boolean;
@@ -172,7 +197,6 @@ const VoiceButton = ({
   disabled?: boolean;
 }) => {
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const pulse2Anim = useRef(new Animated.Value(1)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -180,43 +204,32 @@ const VoiceButton = ({
   useEffect(() => {
     if (isRecording) {
       Animated.parallel([
-        Animated.loop(
-          Animated.sequence([
-            Animated.parallel([
-              Animated.timing(pulseAnim, { toValue: 1.6, duration: 1000, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-              Animated.timing(opacityAnim, { toValue: 0.7, duration: 500, useNativeDriver: true }),
-            ]),
-            Animated.timing(pulseAnim, { toValue: 1, duration: 0, useNativeDriver: true }),
-            Animated.timing(opacityAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
-          ])
-        ),
-        Animated.loop(
-          Animated.sequence([
-            Animated.delay(300),
-            Animated.timing(pulse2Anim, { toValue: 1.4, duration: 1000, useNativeDriver: true }),
-            Animated.timing(pulse2Anim, { toValue: 1, duration: 0, useNativeDriver: true }),
-          ])
-        ),
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(scaleAnim, { toValue: 1.05, duration: 250, useNativeDriver: true }),
-            Animated.timing(scaleAnim, { toValue: 0.95, duration: 250, useNativeDriver: true }),
-          ])
-        ),
+        Animated.loop(Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.5, duration: 800, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 0, useNativeDriver: true }),
+        ])),
+        Animated.loop(Animated.sequence([
+          Animated.timing(opacityAnim, { toValue: 0.6, duration: 400, useNativeDriver: true }),
+          Animated.timing(opacityAnim, { toValue: 0.2, duration: 400, useNativeDriver: true }),
+        ])),
+        Animated.loop(Animated.sequence([
+          Animated.timing(scaleAnim, { toValue: 1.05, duration: 200, useNativeDriver: true }),
+          Animated.timing(scaleAnim, { toValue: 0.95, duration: 200, useNativeDriver: true }),
+        ])),
       ]).start();
     } else if (isProcessing) {
-      Animated.loop(
-        Animated.timing(rotateAnim, { toValue: 1, duration: 1200, easing: Easing.linear, useNativeDriver: true })
-      ).start();
+      Animated.loop(Animated.timing(rotateAnim, { 
+        toValue: 1, duration: 1000, easing: Easing.linear, useNativeDriver: true 
+      })).start();
     } else if (isSpeaking) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(scaleAnim, { toValue: 1.08, duration: 180, useNativeDriver: true }),
-          Animated.timing(scaleAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
-        ])
-      ).start();
+      Animated.loop(Animated.sequence([
+        Animated.timing(scaleAnim, { toValue: 1.08, duration: 150, useNativeDriver: true }),
+        Animated.timing(scaleAnim, { toValue: 1, duration: 150, useNativeDriver: true }),
+      ])).start();
     } else {
-      [pulseAnim, pulse2Anim, opacityAnim, rotateAnim].forEach(a => a.setValue(a === opacityAnim ? 0 : 1));
+      pulseAnim.setValue(1);
+      opacityAnim.setValue(0);
+      rotateAnim.setValue(0);
       scaleAnim.setValue(1);
     }
   }, [isRecording, isProcessing, isSpeaking]);
@@ -226,10 +239,7 @@ const VoiceButton = ({
   return (
     <View style={styles.voiceButtonWrapper}>
       {isRecording && (
-        <>
-          <Animated.View style={[styles.pulseRing, { transform: [{ scale: pulseAnim }], opacity: opacityAnim }]} />
-          <Animated.View style={[styles.pulseRing, styles.pulseRing2, { transform: [{ scale: pulse2Anim }], opacity: Animated.multiply(opacityAnim, 0.5) }]} />
-        </>
+        <Animated.View style={[styles.pulseRing, { transform: [{ scale: pulseAnim }], opacity: opacityAnim }]} />
       )}
       <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
         <TouchableOpacity
@@ -266,42 +276,32 @@ const VoiceButton = ({
 export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessingAI, setIsProcessingAI] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
   const [userLanguage, setUserLanguage] = useState('UK');
-  const [orchestratorStatus, setOrchestratorStatus] = useState<string>('ready');
+  const [status, setStatus] = useState<string>('ready');
   
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const {
-    isListening,
-    transcript,
-    interimTranscript,
-    isFinal,
-    isSupported: webSpeechSupported,
-    startListening,
-    stopListening,
-    reset: resetSpeech,
-  } = useWebSpeechRecognition();
+  const { isListening, transcript, interimTranscript, isFinal, isSupported, startListening, stopListening, reset } = useWebSpeechRecognition();
+  const { isPlaying, playAudio, stopAudio } = useGoogleTTS();
 
   useEffect(() => {
     setMessages([{
       id: '1',
       role: 'assistant',
-      text: 'Вітаю! Я ваш персональний сомельє.\n\n🎤 Натисніть мікрофон і скажіть запит — я одразу відповім голосом!',
+      text: 'Вітаю! Я ваш персональний сомельє.\n\n🎤 Натисніть мікрофон → скажіть запит → я ОДРАЗУ відповім живим голосом!',
       timestamp: new Date(),
     }]);
     loadUserPreferences();
   }, []);
 
-  // Process voice input when recognition is final
+  // Auto-process when speech recognition is final
   useEffect(() => {
     if (isFinal && transcript && !isProcessingAI) {
-      runAIOrchestrator(transcript);
-      resetSpeech();
+      runVoiceToVoice(transcript);
+      reset();
     }
   }, [isFinal, transcript]);
 
@@ -318,167 +318,147 @@ export default function ChatScreen() {
         const user = await api.getUser(userId);
         setUserLanguage(user.preferred_language || 'UK');
       }
-    } catch (error) {
-      console.log('Error loading preferences');
-    }
+    } catch (error) {}
   };
 
   // ============================================
-  // 🎭 AI ORCHESTRATOR - Main Flow
+  // 🎭 VOICE-TO-VOICE ORCHESTRATOR
   // ============================================
-  const runAIOrchestrator = async (v_input: string) => {
-    if (!v_input.trim()) return;
+  const runVoiceToVoice = async (user_query: string) => {
+    if (!user_query.trim()) return;
 
-    console.log('🎭 Orchestrator: v_input =', v_input);
+    console.log('🎤 Voice Input:', user_query);
     
+    // Stop listening
     setIsRecording(false);
     stopListening();
     setInputText('');
-    setOrchestratorStatus('thinking');
     
-    // Add user message
+    // 1. Add user message to chat
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      text: v_input,
+      text: user_query,
       timestamp: new Date(),
       isVoice: true,
     };
     setMessages(prev => [...prev, userMessage]);
+    
+    // 2. Process with Gemini
     setIsProcessingAI(true);
+    setStatus('thinking');
     
     try {
       const userId = await AsyncStorage.getItem('userId');
       if (!userId) throw new Error('User not found');
 
       // Send to Gemini AI
-      const response = await api.sendChatMessage(
+      const aiResponse = await api.sendChatMessage(
         userId,
-        `${SOMMELIER_PROMPT}\n\nЗапит: ${v_input}`,
+        `${SOMMELIER_PROMPT}\n\nЗапит: ${user_query}`,
         sessionId || undefined
       );
 
-      if (!sessionId && response.session_id) setSessionId(response.session_id);
+      if (!sessionId && aiResponse.session_id) setSessionId(aiResponse.session_id);
 
-      const v_output = response.response;
-      console.log('🧠 Orchestrator: v_output =', v_output.substring(0, 80));
+      const ai_answer = aiResponse.response;
+      console.log('🧠 AI Answer:', ai_answer.substring(0, 100));
 
-      // Add AI response
+      // 3. Add AI response to chat
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        text: v_output,
+        text: ai_answer,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, assistantMessage]);
       setIsProcessingAI(false);
-      
-      // Speak with natural voice
-      setOrchestratorStatus('speaking');
-      await speakNaturally(v_output);
-      setOrchestratorStatus('ready');
 
-    } catch (error) {
-      console.error('❌ Orchestrator error:', error);
-      Alert.alert('Помилка', 'Не вдалося отримати відповідь');
-      setIsProcessingAI(false);
-      setOrchestratorStatus('ready');
-    }
-  };
-
-  // ============================================
-  // 🔊 NATURAL TTS - Human-like Voice
-  // ============================================
-  const speakNaturally = async (v_output: string): Promise<void> => {
-    return new Promise(async (resolve) => {
-      // Stop any current speech
-      Speech.stop();
-
-      // Detect language
-      const detectLanguage = (text: string): string => {
-        const sample = text.substring(0, 150);
-        if (/[іїєґ]/i.test(sample)) return 'uk-UA';
-        if (/[ыэъ]/i.test(sample) || /\b(что|как|это|для|или|на|вы|мы|не)\b/i.test(sample)) return 'ru-RU';
-        if (/^[a-zA-Z\s.,!?'"()\-:;0-9]+$/.test(sample)) return 'en-US';
+      // 4. Detect language for TTS
+      const detectLang = (text: string): string => {
+        if (/[іїєґ]/i.test(text)) return 'uk-UA';
+        if (/[ыэъ]/i.test(text) || /\b(что|как|это|для)\b/i.test(text)) return 'ru-RU';
+        if (/^[a-zA-Z\s.,!?'"()-]+$/.test(text.substring(0, 80))) return 'en-US';
         return 'uk-UA';
       };
 
-      const language = detectLanguage(v_output);
-      console.log('🗣️ Language detected:', language);
+      const ttsLanguage = detectLang(ai_answer);
 
-      // Clean text for natural speech
-      const cleanText = v_output
-        .replace(/[🍷🌡🍽⭐✨💫🎤🔊🥂🍾🍇🍎]/g, '')
-        .replace(/\*\*([^*]+)\*\*/g, '$1')
-        .replace(/\*([^*]+)\*/g, '$1')
-        .replace(/#{1,3}\s/g, '')
-        .replace(/•\s/g, '')
-        .replace(/\n{2,}/g, '. ')
-        .replace(/\n/g, ', ')
-        .replace(/\s{2,}/g, ' ')
-        .replace(/\([^)]*\)/g, '')  // Remove parentheses content
-        .trim()
-        .substring(0, 500);
+      // 5. Call Google Cloud TTS with Wavenet voice (fallback to expo-speech)
+      setStatus('speaking');
+      console.log('🔊 Requesting Google TTS...');
+      
+      try {
+        const ttsResponse = await api.synthesizeSpeech(ai_answer, ttsLanguage);
+        
+        if (ttsResponse.audio_base64 && ttsResponse.success) {
+          console.log('🔊 Playing Wavenet audio...');
+          await playAudio(ttsResponse.audio_base64);
+        } else {
+          // Fallback to expo-speech when Google TTS is unavailable
+          console.log('🔊 Fallback to expo-speech');
+          const Speech = require('expo-speech');
+          const langMap: Record<string, string> = { 'uk-UA': 'uk', 'en-US': 'en', 'ru-RU': 'ru' };
+          const cleanText = ai_answer.replace(/\*\*/g, '').replace(/[🍷🌡🍽⭐✨💫🎤🔊🥂🍾🍇🍎📷#•]/g, '').substring(0, 400);
+          await new Promise<void>((resolve) => {
+            Speech.speak(cleanText, {
+              language: langMap[ttsLanguage] || 'uk',
+              pitch: 1.1,
+              rate: 0.95,
+              onDone: resolve,
+              onError: () => resolve(),
+            });
+          });
+        }
+      } catch (ttsError) {
+        console.log('TTS error, using fallback:', ttsError);
+        const Speech = require('expo-speech');
+        const cleanText = ai_answer.replace(/\*\*/g, '').replace(/[🍷🌡🍽⭐✨💫🎤🔊🥂🍾🍇🍎📷#•]/g, '').substring(0, 400);
+        try {
+          await new Promise<void>((resolve) => {
+            Speech.speak(cleanText, {
+              language: 'uk',
+              pitch: 1.1,
+              rate: 0.95,
+              onDone: resolve,
+              onError: () => resolve(),
+            });
+          });
+        } catch (e) { /* silent fail */ }
+      }
 
-      // Get language-specific rate
-      const rate = TTS_CONFIG.languageRates[language] || TTS_CONFIG.rate;
+      setStatus('ready');
 
-      console.log('🔊 TTS Config: pitch=', TTS_CONFIG.pitch, 'rate=', rate);
-
-      // ⏳ "Taking breath" pause before speaking
-      await new Promise(r => setTimeout(r, TTS_CONFIG.pauseBeforeMs));
-
-      setIsSpeaking(true);
-
-      Speech.speak(cleanText, {
-        language,
-        pitch: TTS_CONFIG.pitch,    // 1.1 - warmer, more emotional
-        rate: rate,                  // 1.05-1.1 - slightly faster, more natural
-        onDone: () => {
-          console.log('✅ Speech done');
-          setIsSpeaking(false);
-          resolve();
-        },
-        onError: (error) => {
-          console.error('TTS error:', error);
-          setIsSpeaking(false);
-          resolve();
-        },
-        onStopped: () => {
-          setIsSpeaking(false);
-          resolve();
-        },
-      });
-    });
-  };
-
-  const stopSpeaking = () => {
-    Speech.stop();
-    setIsSpeaking(false);
-    setOrchestratorStatus('ready');
+    } catch (error) {
+      console.error('❌ Voice-to-Voice error:', error);
+      Alert.alert('Помилка', 'Не вдалося обробити запит');
+      setIsProcessingAI(false);
+      setStatus('ready');
+    }
   };
 
   // ============================================
   // 🎤 Voice Button Handler
   // ============================================
   const handleVoicePress = () => {
-    if (isSpeaking) {
-      stopSpeaking();
+    if (isPlaying) {
+      stopAudio();
+      setStatus('ready');
       return;
     }
     
     if (isRecording || isListening) {
       setIsRecording(false);
       stopListening();
-      setOrchestratorStatus('ready');
+      setStatus('ready');
     } else {
-      if (Platform.OS === 'web' && webSpeechSupported) {
+      if (Platform.OS === 'web' && isSupported) {
         setIsRecording(true);
-        setOrchestratorStatus('listening');
+        setStatus('listening');
         setInputText('');
         startListening(userLanguage);
       } else {
-        Alert.alert('Голосовий ввід', 'Використайте Chrome для голосового вводу');
+        Alert.alert('Голосовий ввід', 'Використайте браузер Chrome');
       }
     }
   };
@@ -489,16 +469,14 @@ export default function ChatScreen() {
   const sendTextMessage = async (text: string) => {
     if (!text.trim()) return;
     
-    const userMessage: Message = {
+    setMessages(prev => [...prev, {
       id: Date.now().toString(),
       role: 'user',
       text: text.trim(),
       timestamp: new Date(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
+    }]);
     setInputText('');
-    setIsLoading(true);
+    setIsProcessingAI(true);
 
     try {
       const userId = await AsyncStorage.getItem('userId');
@@ -507,18 +485,16 @@ export default function ChatScreen() {
       const response = await api.sendChatMessage(userId, text.trim(), sessionId || undefined);
       if (!sessionId) setSessionId(response.session_id);
 
-      const assistantMessage: Message = {
+      setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         text: response.response,
         timestamp: new Date(),
-      };
-
-      setMessages(prev => [...prev, assistantMessage]);
+      }]);
     } catch (error) {
       Alert.alert('Помилка', 'Не вдалося отримати відповідь');
     } finally {
-      setIsLoading(false);
+      setIsProcessingAI(false);
     }
   };
 
@@ -535,74 +511,69 @@ export default function ChatScreen() {
 
       if (!result.canceled && result.assets[0]?.base64) {
         setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: 'user',
-          text: '📷 Фото для аналізу',
-          timestamp: new Date(),
+          id: Date.now().toString(), role: 'user', text: '📷 Фото', timestamp: new Date(),
         }]);
-        setIsLoading(true);
+        setIsProcessingAI(true);
 
         const userId = await AsyncStorage.getItem('userId');
         if (!userId) throw new Error('User not found');
 
         const response = await api.sendChatMessage(
-          userId,
-          'Проаналізуй фото і дай коротку рекомендацію як сомельє',
-          sessionId || undefined,
-          result.assets[0].base64
+          userId, 'Проаналізуй фото і дай коротку рекомендацію',
+          sessionId || undefined, result.assets[0].base64
         );
 
+        const aiText = response.response;
         setMessages(prev => [...prev, {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          text: response.response,
-          timestamp: new Date(),
+          id: (Date.now() + 1).toString(), role: 'assistant', text: aiText, timestamp: new Date(),
         }]);
-        setIsLoading(false);
+        setIsProcessingAI(false);
 
-        // Auto-speak
-        await speakNaturally(response.response);
+        // Auto-speak with fallback
+        try {
+          const ttsResponse = await api.synthesizeSpeech(aiText, 'uk-UA');
+          if (ttsResponse.audio_base64 && ttsResponse.success) {
+            await playAudio(ttsResponse.audio_base64);
+          } else {
+            const Speech = require('expo-speech');
+            const cleanText = aiText.replace(/\*\*/g, '').replace(/[🍷🌡🍽⭐✨💫📷#•]/g, '').substring(0, 400);
+            Speech.speak(cleanText, { language: 'uk', pitch: 1.1, rate: 0.95 });
+          }
+        } catch (e) { /* silent TTS fail */ }
       }
     } catch (error) {
-      setIsLoading(false);
+      setIsProcessingAI(false);
     }
   };
 
   const getStatusText = () => {
-    switch (orchestratorStatus) {
+    switch (status) {
       case 'listening': return '🎤 Слухаю...';
       case 'thinking': return '🧠 Думаю...';
       case 'speaking': return '🔊 Говорю...';
-      default: return '● Онлайн';
+      default: return '● Готовий';
     }
   };
 
   const isVoiceActive = isRecording || isListening;
-  const showSendButton = inputText.trim() && !isVoiceActive && !isProcessingAI;
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Animated.View style={[
-            styles.avatarContainer,
-            isSpeaking && styles.avatarSpeaking,
-          ]}>
+          <Animated.View style={[styles.avatar, isPlaying && styles.avatarSpeaking]}>
             <Text style={styles.avatarText}>C</Text>
           </Animated.View>
           <View>
             <Text style={styles.headerTitle}>CHEFLY</Text>
-            <Text style={[
-              styles.headerSubtitle,
-              orchestratorStatus !== 'ready' && styles.headerSubtitleActive,
-            ]}>
+            <Text style={[styles.headerSubtitle, status !== 'ready' && styles.activeStatus]}>
               {getStatusText()}
             </Text>
           </View>
         </View>
-        {isSpeaking && (
-          <TouchableOpacity style={styles.stopButton} onPress={stopSpeaking}>
+        {isPlaying && (
+          <TouchableOpacity style={styles.stopBtn} onPress={stopAudio}>
             <Ionicons name="stop" size={18} color={Colors.error} />
           </TouchableOpacity>
         )}
@@ -612,9 +583,7 @@ export default function ChatScreen() {
       {isVoiceActive && (
         <View style={styles.recordingBanner}>
           <View style={styles.soundWave}>
-            {[1,2,3,4,5].map((i) => (
-              <Animated.View key={i} style={[styles.soundBar, { height: 6 + Math.random() * 18 }]} />
-            ))}
+            {[1,2,3,4,5].map(i => <View key={i} style={[styles.soundBar, { height: 6 + Math.random() * 16 }]} />)}
           </View>
           <Text style={styles.recordingText}>Говоріть зараз...</Text>
         </View>
@@ -627,31 +596,16 @@ export default function ChatScreen() {
         contentContainerStyle={styles.messagesContent}
         onContentSizeChange={() => scrollViewRef.current?.scrollToEnd()}
       >
-        {messages.map((message) => (
-          <View key={message.id}>
-            <View style={[
-              styles.messageBubble,
-              message.role === 'user' ? styles.userBubble : styles.assistantBubble,
-            ]}>
-              {message.isVoice && (
-                <Ionicons name="mic" size={14} color={Colors.goldDark} style={styles.voiceIcon} />
-              )}
-              <Text style={[styles.messageText, message.role === 'user' && styles.userMessageText]}>
-                {message.text}
-              </Text>
-            </View>
-            {message.role === 'assistant' && (
-              <TouchableOpacity style={styles.speakBtn} onPress={() => speakNaturally(message.text)}>
-                <Ionicons name="volume-medium-outline" size={16} color={Colors.textMuted} />
-              </TouchableOpacity>
-            )}
+        {messages.map(msg => (
+          <View key={msg.id} style={[styles.bubble, msg.role === 'user' ? styles.userBubble : styles.aiBubble]}>
+            {msg.isVoice && <Ionicons name="mic" size={14} color={Colors.goldDark} style={styles.voiceIcon} />}
+            <Text style={[styles.bubbleText, msg.role === 'user' && styles.userText]}>{msg.text}</Text>
           </View>
         ))}
-
-        {(isLoading || isProcessingAI) && (
+        {isProcessingAI && (
           <View style={styles.loadingBubble}>
             <ActivityIndicator size="small" color={Colors.gold} />
-            <Text style={styles.loadingText}>Сомельє готує відповідь...</Text>
+            <Text style={styles.loadingText}>Сомельє думає...</Text>
           </View>
         )}
       </ScrollView>
@@ -660,8 +614,8 @@ export default function ChatScreen() {
       {messages.length <= 1 && !isVoiceActive && (
         <View style={styles.quickPrompts}>
           {['Вино до стейку', 'Що до сиру?', 'Коктейль'].map((label, i) => (
-            <TouchableOpacity key={i} style={styles.quickPromptBtn} onPress={() => runAIOrchestrator(label)}>
-              <Text style={styles.quickPromptText}>{label}</Text>
+            <TouchableOpacity key={i} style={styles.promptBtn} onPress={() => runVoiceToVoice(label)}>
+              <Text style={styles.promptText}>{label}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -675,7 +629,7 @@ export default function ChatScreen() {
           </TouchableOpacity>
           
           <TextInput
-            style={[styles.textInput, isVoiceActive && styles.textInputListening]}
+            style={[styles.textInput, isVoiceActive && styles.textInputActive]}
             placeholder={isVoiceActive ? "Слухаю..." : "Напишіть або 🎤"}
             placeholderTextColor={isVoiceActive ? Colors.gold : Colors.textMuted}
             value={inputText}
@@ -688,12 +642,12 @@ export default function ChatScreen() {
           <VoiceButton
             isRecording={isVoiceActive}
             isProcessing={isProcessingAI}
-            isSpeaking={isSpeaking}
+            isSpeaking={isPlaying}
             onPress={handleVoicePress}
-            disabled={isLoading}
+            disabled={false}
           />
           
-          {showSendButton && (
+          {inputText.trim() && !isVoiceActive && !isProcessingAI && (
             <TouchableOpacity style={styles.sendBtn} onPress={() => sendTextMessage(inputText)}>
               <Ionicons name="send" size={20} color={Colors.black} />
             </TouchableOpacity>
@@ -710,150 +664,76 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.black },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center' },
-  avatarContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gold,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
+  avatar: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.gold,
+    justifyContent: 'center', alignItems: 'center', marginRight: 12,
   },
   avatarSpeaking: {
-    shadowColor: Colors.gold,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 20,
-    elevation: 20,
+    shadowColor: Colors.gold, shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1, shadowRadius: 20, elevation: 20,
   },
   avatarText: { color: Colors.black, fontSize: 20, fontWeight: '900', fontFamily: 'Georgia' },
   headerTitle: { fontSize: 17, fontWeight: '700', color: Colors.textPrimary, letterSpacing: 1 },
   headerSubtitle: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
-  headerSubtitleActive: { color: Colors.gold, fontWeight: '600' },
-  stopButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.surfaceElevated,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.error,
+  activeStatus: { color: Colors.gold, fontWeight: '600' },
+  stopBtn: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.surfaceElevated,
+    justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: Colors.error,
   },
   recordingBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    backgroundColor: Colors.goldTransparent,
-    gap: 12,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 12, backgroundColor: Colors.goldTransparent, gap: 12,
   },
   soundWave: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   soundBar: { width: 3, backgroundColor: Colors.gold, borderRadius: 2 },
   recordingText: { fontSize: 13, color: Colors.gold, fontWeight: '500' },
   messagesContainer: { flex: 1 },
   messagesContent: { padding: 16 },
-  messageBubble: {
-    maxWidth: '85%',
-    padding: 14,
-    borderRadius: 20,
-    marginBottom: 6,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
+  bubble: { maxWidth: '85%', padding: 14, borderRadius: 20, marginBottom: 8, flexDirection: 'row', alignItems: 'flex-start' },
   userBubble: { alignSelf: 'flex-end', backgroundColor: Colors.gold, borderBottomRightRadius: 4 },
-  assistantBubble: { alignSelf: 'flex-start', backgroundColor: Colors.surfaceElevated, borderBottomLeftRadius: 4 },
+  aiBubble: { alignSelf: 'flex-start', backgroundColor: Colors.surfaceElevated, borderBottomLeftRadius: 4 },
   voiceIcon: { marginRight: 6, marginTop: 3 },
-  messageText: { fontSize: 15, lineHeight: 22, color: Colors.textPrimary, flex: 1 },
-  userMessageText: { color: Colors.black },
-  speakBtn: { alignSelf: 'flex-start', padding: 6, marginBottom: 10, marginLeft: 10 },
+  bubbleText: { fontSize: 15, lineHeight: 22, color: Colors.textPrimary, flex: 1 },
+  userText: { color: Colors.black },
   loadingBubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.surfaceElevated,
-    padding: 14,
-    borderRadius: 20,
-    gap: 10,
+    flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
+    backgroundColor: Colors.surfaceElevated, padding: 14, borderRadius: 20, gap: 10,
   },
   loadingText: { fontSize: 14, color: Colors.gold, fontStyle: 'italic' },
   quickPrompts: { flexDirection: 'row', paddingHorizontal: 16, paddingBottom: 10, gap: 8 },
-  quickPromptBtn: {
-    backgroundColor: Colors.surfaceElevated,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Colors.goldTransparent40,
+  promptBtn: {
+    backgroundColor: Colors.surfaceElevated, paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 20, borderWidth: 1, borderColor: Colors.goldTransparent40,
   },
-  quickPromptText: { fontSize: 13, color: Colors.gold, fontWeight: '500' },
+  promptText: { fontSize: 13, color: Colors.gold, fontWeight: '500' },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    padding: 12,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    gap: 8,
+    flexDirection: 'row', alignItems: 'flex-end', padding: 12,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 12, borderTopWidth: 1, borderTopColor: Colors.border, gap: 8,
   },
   cameraBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.surfaceElevated,
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surfaceElevated,
+    justifyContent: 'center', alignItems: 'center',
   },
   textInput: {
-    flex: 1,
-    minHeight: 44,
-    maxHeight: 100,
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: 22,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: Colors.textPrimary,
+    flex: 1, minHeight: 44, maxHeight: 100, backgroundColor: Colors.surfaceElevated,
+    borderRadius: 22, paddingHorizontal: 18, paddingVertical: 12, fontSize: 15, color: Colors.textPrimary,
   },
-  textInputListening: { borderWidth: 1, borderColor: Colors.gold, backgroundColor: Colors.goldTransparent },
+  textInputActive: { borderWidth: 1, borderColor: Colors.gold, backgroundColor: Colors.goldTransparent },
   voiceButtonWrapper: { width: 58, height: 58, justifyContent: 'center', alignItems: 'center' },
   pulseRing: { position: 'absolute', width: 58, height: 58, borderRadius: 29, backgroundColor: Colors.gold },
-  pulseRing2: { backgroundColor: Colors.goldLight },
   voiceButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: Colors.surfaceElevated,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.gold,
+    width: 52, height: 52, borderRadius: 26, backgroundColor: Colors.surfaceElevated,
+    justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: Colors.gold,
   },
   voiceButtonRecording: {
-    backgroundColor: Colors.gold,
-    borderColor: Colors.gold,
-    shadowColor: Colors.gold,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 20,
-    elevation: 15,
+    backgroundColor: Colors.gold, borderColor: Colors.gold,
+    shadowColor: Colors.gold, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 20, elevation: 15,
   },
   voiceButtonProcessing: { borderColor: Colors.gold, borderWidth: 2 },
   voiceButtonSpeaking: { backgroundColor: Colors.goldTransparent, borderColor: Colors.gold },
-  sendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gold,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.gold, justifyContent: 'center', alignItems: 'center' },
 });

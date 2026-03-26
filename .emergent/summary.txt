@@ -1,0 +1,126 @@
+<analysis>**INSTRUCTION FOR NEXT AGENT:** The user's preferred language is **Russian**. You MUST respond to the user and write all human-facing UI text in Russian, unless explicitly requested otherwise.
+
+**original_problem_statement:** 
+Create a premium mobile app called CHEFLY — an AI-Sommelier and Concierge. The app helps users choose alcoholic beverages by scanning store shelves (via Gemini 1.5/2.5 Flash Vision) and factoring in their budget. It features a continuous chat with an elite sommelier persona.
+*Design Requirements:* Premium, luxury, minimalism. Black background (#000000) with gold accents (#C5A059), Serif fonts.
+*Key Features:* Shelf Scan, Voice-to-Voice Chat Orchestrator, Profile management, Premium Paywall (RevenueCat), Firebase Auth. 
+*Note:* The user originally requested Flutter/Dart and provided a zip file with Flutter code, but as per environment constraints, this was rebuilt using the **Expo (React Native) + FastAPI + MongoDB** stack while strictly adhering to the user's design scheme.
+
+**what currently exists?** 
+A fully functional MVP with an Expo React Native frontend and FastAPI backend. The app features a premium black and gold UI with proper navigation (Splash, Onboarding, Tabs: Chat, Scanner, History, Profile, Premium). The backend handles user creation, chat logic using Gemini 2.5 Flash (via Emergent LLM key), and bottle scanning logic. A highly requested Voice-to-Voice AI Orchestrator is built into the Chat screen, which seamlessly handles Mic Press -> Speech-to-Text -> Gemini API -> Text-to-Speech without requiring multiple clicks.
+
+**Last working item:**
+- **Last item agent was working:** Implementing Google Cloud Text-to-Speech (Neural2/Wavenet voices) to replace the robotic default device TTS for the AI Sommelier's voice.
+- **Status:** BLOCKED
+- **Agent Testing Done:** Y
+- **Which testing method agent to use?** Manual testing by python -c / curl for backend TTS endpoint.
+- **User Testing Done:** N
+
+**All Pending/In progress Issue list:**
+- **Issue 1:** Google Cloud TTS API returns 403 Forbidden (Priority: P0)
+  - **Attempted fixes:** Implemented the  endpoint in the backend using the user-provided Google API key. Testing the endpoint resulted in: . The agent implemented a fallback to  to keep the app working.
+  - **Next debug checklist:** Check  (TTS Route). Instruct the user to enable the Cloud Text-to-Speech API in their Google Cloud Console. Once enabled, verify the backend endpoint works and remove the  fallback in .
+  - **Why fix this issue and what will be achieved with the fix?** The user specifically complained about the robotic default voice and explicitly requested high-quality Google Wavenet/Neural2 voices for a natural, human-like experience.
+  - **Status:** BLOCKED (Waiting on User to enable API in GCP)
+  - **Is recurring issue?** N
+  - **Should Test frontend/backend/both after fix?** Both
+  - **Blocked on other issue:** User action required in GCP console.
+
+**In progress Task List:**
+- **Task 1:** Connect High-Quality AI Voice (Google TTS or Cartesia) (Priority: P0)
+  - **Where to resume:**  and 
+  - **What will be achieved with this?** The AI sommelier will sound like a real human (e.g., Alice/Gemini Live), satisfying the user's strict voice-to-voice requirements.
+  - **Status:** BLOCKED
+  - **Should Test frontend/backend/both after fix?** Both
+  - **Blocked on something:** GCP API enablement. *Note: User mentioned if this is hard, try connecting Cartesia AI. You may pivot to Cartesia if the GCP route remains blocked.*
+
+**Upcoming and Future Tasks:**
+- **Task 1 (P1):** Integrate Firebase Auth for user login/registration. (Currently user auth is handled via simple device_id generation in backend).
+- **Task 2 (P1):** Integrate RevenueCat for the Premium Paywall screen to handle actual subscriptions.
+- **Task 3 (P2):** Add a visual pulse or wave animation around the microphone button during recording, as requested by the user in earlier prompts, to show active listening.
+
+**Completed work in this session:**
+- Extracted and analyzed user's Flutter UI assets and translated them into Expo/React Native theme (, ). (DONE)
+- Built backend FastAPI architecture with MongoDB (). (DONE)
+- Integrated Gemini 2.5 Flash via Emergent LLM key for Chat and Vision (Shelf scanning). (DONE)
+- Created full UI flow: Splash, Onboarding, Tabs (Chat, Scanner, History, Profile), Premium Paywall. (DONE)
+- Implemented Voice-to-Voice AI Orchestrator on Chat screen (STT -> Gemini -> TTS). (DONE)
+
+**Earlier issues found/mentioned but not fixed:**
+- **Issue 1:** Microphone pulse animation
+  - **Debug checklist:** Check . The user requested an animation while recording. Ensure  is used to create a pulsing halo effect around the mic button when  is true.
+  - **Why to solve this issue and what will be achieved with this?** Provides necessary UX feedback so the user knows the app is listening.
+  - **Should Test frontend/backend/both after fix:** Frontend
+  - **Is recurring issue?** N
+
+**Known issue recurrence from previous fork:**
+- Issue recurrence in previous fork: NA
+- Recurrence count: 0
+- Status: NA
+
+**Code Architecture:**
+
+
+**Key Technical Concepts:**
+- Frontend: Expo Router, React Native, Zustand, ,  (for audio recording).
+- Backend: FastAPI, Motor (Async MongoDB),  (Gemini 2.5).
+- Voice Orchestrator Flow: Auto-triggers -> Mic Press starts recording -> Release stops recording & converts Speech to Text -> Immediately POSTs to backend -> Gets Gemini response -> Immediately triggers TTS to play response.
+
+**key DB schema:**
+- : {id, device_id, preferred_language, preferred_currency, budget_limit, subscription_status, trial_start_date}
+- : {id, user_id, created_at, updated_at}
+- : {id, session_id, role, content, image_base64, timestamp}
+
+**changes in tech stack:**
+- Switched from User-provided Flutter template to standard Expo (React Native) + FastAPI + MongoDB environment.
+
+**All files of reference:**
+- : The most critical frontend file containing the complex STT/TTS and Orchestrator logic.
+- : Contains Gemini implementation and the newly added, currently failing  endpoint.
+
+**Areas that need refactoring:**
+- : The voice orchestration logic (recording, playing audio, handling states) makes this component very large. Consider abstracting into a  hook.
+
+**key api endpoints:**
+- 
+-  (Handles Gemini text generation)
+-  (Handles Gemini Vision)
+-  (Google Cloud TTS - currently blocked by 403)
+
+**Critical Info for New Agent:**
+- The user is extremely specific about the Voice-to-Voice experience. They do NOT want robotic voices. They explicitly provided a JSON payload and API URL for Google Cloud TTS (Neural2/Wavenet). 
+- **DO NOT attempt to use  as the final solution.** You must figure out the backend TTS streaming. Since the user's GCP API is throwing a 403, you MUST inform the user to enable the Cloud Text-to-Speech API in their Google Developer Console. Alternatively, pivot to Cartesia AI as they suggested.
+- If implementing external TTS, ensure the frontend can decode and automatically play the  (base64) returned by the backend using .
+
+**documents and test reports created in this job:**
+-  (Contains backend testing status)
+
+**Last 10 User Messages and any pending HUMAN messages:**
+1. (Oldest) *User requested to start the task with an attached screenshot.*
+2. *User provided Flutter source code, asked for Gemini 2.5, Firebase, and RevenueCat integration.* -> Translated to RN, Gemini connected.
+3. *User said продолжаем (continue).* -> Agent built the rest of the UI screens.
+4. *User requested a voice AI assistant on the Chat page (Mic button -> STT -> Gemini -> TTS).* -> Agent implemented basic voice flow.
+5. *User requested seamless Voice-to-Voice logic (auto-triggering STT to AI to TTS).* -> Agent implemented the automation flow.
+6. *User refined instructions for the AI Orchestrator (Pitch 1.1, Rate 1.0, Neural voice).* -> Agent refined expo-speech settings.
+7. (Latest) *User rejected robotic voice. Requested implementation of Google Cloud TTS API using their provided payload/key for Wavenet/Neural2 voices, or fallback to Cartesia AI.* -> Agent implemented the backend route, but it returned a 403 because the API is disabled in the user's GCP project. Agent implemented an  fallback. **(PENDING USER NOTIFICATION TO ENABLE API)**.
+
+**Project Health Check:**
+- Broken: High-Quality Google TTS endpoint (403 Error due to GCP configuration).
+- Mocked: Firebase Auth (using device_id generation), RevenueCat (dummy UI/flow).
+
+**3rd Party Integrations:**
+- Google Gemini 2.5 Flash — uses Emergent LLM Key
+- Google Cloud Text-to-Speech — requires User API Key (Provided, but API disabled in GCP)
+
+**Testing status:**
+- Testing agent used after significant changes: YES (Backend)
+- Troubleshoot agent used after agent stuck in loop: NO
+- Test files created: None
+- Known regressions: None
+
+**Credentials to test flow:**
+- Emergent LLM key is configured.
+- Google Cloud API key provided by user in the prompt is hardcoded/used in  for TTS.
+
+**What agent forgot to execute:**
+- Visual pulsing animation around the microphone during recording ( state) was mentioned by the user in an earlier prompt but not prominently implemented in the UI.</analysis>

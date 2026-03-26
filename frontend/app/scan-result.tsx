@@ -6,12 +6,17 @@ import {
   SafeAreaView,
   ScrollView,
   TouchableOpacity,
+  Dimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../src/theme/colors';
 import { GoldButton } from '../src/components/GoldButton';
 import { DarkCard } from '../src/components/DarkCard';
+import IMAGES from '../src/constants/images';
+
+const { width } = Dimensions.get('window');
 
 export default function ScanResultScreen() {
   const router = useRouter();
@@ -26,12 +31,16 @@ export default function ScanResultScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textSecondary} />
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={22} color={Colors.textSecondary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Top Selections</Text>
-        <TouchableOpacity>
-          <Ionicons name="share-outline" size={22} color={Colors.textSecondary} />
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerLabel}>CHEFLY AI</Text>
+          <Text style={styles.headerTitle}>Top Selections</Text>
+          <Text style={styles.headerSubtitle}>Best matches within your budget</Text>
+        </View>
+        <TouchableOpacity style={styles.shareBtn}>
+          <Ionicons name="share-outline" size={20} color={Colors.textSecondary} />
         </TouchableOpacity>
       </View>
 
@@ -41,29 +50,48 @@ export default function ScanResultScreen() {
       >
         {/* Budget Info */}
         <View style={styles.budgetSection}>
-          <Text style={styles.budgetLabel}>БЮДЖЕТ</Text>
+          <Text style={styles.budgetLabel}>CURRENT BUDGET</Text>
           <Text style={styles.budgetValue}>{budget} {currency}</Text>
         </View>
 
-        {/* AI Results Header */}
+        {/* AI Results Header with Image */}
         <View style={styles.resultsHeader}>
-          <View style={styles.resultsIcon}>
-            <Ionicons name="sparkles" size={18} color={Colors.gold} />
+          <Image
+            source={{ uri: IMAGES.winePairing }}
+            style={styles.resultsHeaderImage}
+            contentFit="cover"
+          />
+          <View style={styles.resultsHeaderOverlay} />
+          <View style={styles.resultsHeaderContent}>
+            <View style={styles.resultsIcon}>
+              <Ionicons name="sparkles" size={18} color={Colors.gold} />
+            </View>
+            <View>
+              <Text style={styles.resultsLabel}>SOMMELIER'S CHOICE</Text>
+              <Text style={styles.resultsTitle}>AI Analysis Results</Text>
+            </View>
           </View>
-          <Text style={styles.resultsTitle}>AI Аналіз Результатів</Text>
         </View>
 
         {/* Recommendations */}
         <DarkCard style={styles.recommendationsCard}>
           <Text style={styles.recommendationsText}>
-            {recommendations || 'Рекомендації не знайдено'}
+            {recommendations || 'No recommendations found'}
           </Text>
         </DarkCard>
 
         {/* Action buttons */}
         <View style={styles.actions}>
+          {/* Disclaimer */}
+          <View style={styles.disclaimerRow}>
+            <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
+            <Text style={styles.disclaimer}>
+              Prices are estimated based on shelf tags. Always verify at checkout.
+            </Text>
+          </View>
+
           <GoldButton
-            label="Нове сканування"
+            label="Start New Scan"
             icon="scan"
             onPress={() => router.replace('/(tabs)/scanner')}
           />
@@ -72,14 +100,9 @@ export default function ScanResultScreen() {
             onPress={() => router.push('/(tabs)/chat')}
           >
             <Ionicons name="chatbubble-outline" size={18} color={Colors.gold} />
-            <Text style={styles.chatButtonText}>Запитати сомельє</Text>
+            <Text style={styles.chatButtonText}>Ask the Sommelier</Text>
           </TouchableOpacity>
         </View>
-
-        {/* Disclaimer */}
-        <Text style={styles.disclaimer}>
-          Ціни орієнтовні. Завжди перевіряйте на касі.
-        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -92,19 +115,51 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     padding: 16,
+    gap: 12,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.surfaceElevated,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerCenter: {
+    flex: 1,
+  },
+  headerLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.gold,
+    letterSpacing: 1.5,
+    marginBottom: 2,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     color: Colors.textPrimary,
     fontFamily: 'Georgia',
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  shareBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.surfaceElevated,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
     flex: 1,
     padding: 20,
+    paddingTop: 0,
   },
   budgetSection: {
     flexDirection: 'row',
@@ -114,6 +169,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   budgetLabel: {
     fontSize: 11,
@@ -122,23 +179,46 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   budgetValue: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     color: Colors.gold,
+    fontFamily: 'Georgia',
   },
   resultsHeader: {
+    height: 100,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+    justifyContent: 'flex-end',
+  },
+  resultsHeaderImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  resultsHeaderOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+  },
+  resultsHeaderContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    padding: 16,
+    gap: 12,
   },
   resultsIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: Colors.goldTransparent,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+  },
+  resultsLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: Colors.gold,
+    letterSpacing: 1,
   },
   resultsTitle: {
     fontSize: 16,
@@ -154,7 +234,20 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   actions: {
-    marginBottom: 24,
+    marginBottom: 40,
+  },
+  disclaimerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  disclaimer: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontStyle: 'italic',
+    flex: 1,
   },
   chatButton: {
     flexDirection: 'row',
@@ -168,12 +261,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.gold,
     fontWeight: '500',
-  },
-  disclaimer: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    fontStyle: 'italic',
-    marginBottom: 40,
   },
 });

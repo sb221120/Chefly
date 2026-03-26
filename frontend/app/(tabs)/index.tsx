@@ -6,7 +6,9 @@ import {
   ScrollView,
   SafeAreaView,
   TouchableOpacity,
+  Dimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../../src/theme/colors';
@@ -15,30 +17,33 @@ import { PremiumBadge } from '../../src/components/PremiumBadge';
 import { GoldButton, GoldOutlineButton } from '../../src/components/GoldButton';
 import { DarkCard } from '../../src/components/DarkCard';
 import { GoldIconBox } from '../../src/components/GoldIconBox';
+import IMAGES from '../../src/constants/images';
+
+const { width } = Dimensions.get('window');
 
 const FEATURES = [
   {
     icon: 'camera-outline' as const,
-    title: 'Фото пляшки',
-    subtitle: 'Миттєве розпізнавання етикетки',
+    title: 'Bottle Photo',
+    subtitle: 'Instant label recognition',
     route: '/scanner' as const,
   },
   {
     icon: 'layers-outline' as const,
-    title: 'Розумне сканування полиці',
-    subtitle: 'Знайдіть найкраще в ряду',
+    title: 'Smart Shelf Scan',
+    subtitle: 'Find the best in the row',
     route: '/scanner' as const,
   },
   {
     icon: 'chatbubble-outline' as const,
-    title: 'Приватний сомельє',
-    subtitle: 'Запитайте пораду експерта',
+    title: 'Private Sommelier',
+    subtitle: 'Ask for expert advice',
     route: '/chat' as const,
   },
   {
     icon: 'restaurant-outline' as const,
-    title: 'Гурманські поєднання',
-    subtitle: 'Ідеальна пара до страви',
+    title: 'Gourmet Pairings',
+    subtitle: 'Perfect match for your dish',
     route: '/chat' as const,
   },
 ];
@@ -60,29 +65,53 @@ export default function HomeScreen() {
             </View>
             <Text style={styles.headerTitle}>CHEFLY</Text>
           </View>
-          <TouchableOpacity
-            style={styles.settingsButton}
-            onPress={() => router.push('/profile')}
-          >
-            <Ionicons name="settings-outline" size={20} color={Colors.textMuted} />
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            <TouchableOpacity style={styles.iconButton}>
+              <Ionicons name="search-outline" size={20} color={Colors.textMuted} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => router.push('/profile')}
+            >
+              <Ionicons name="menu-outline" size={20} color={Colors.textMuted} />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Hero Section */}
+        {/* Hero Section with Image */}
         <View style={styles.heroSection}>
-          <CheflyLogo size={90} glowing />
-          <View style={styles.badgeContainer}>
-            <PremiumBadge />
+          <View style={styles.heroImageContainer}>
+            <Image
+              source={{ uri: IMAGES.wineGlass }}
+              style={styles.heroImage}
+              contentFit="cover"
+            />
+            <View style={styles.heroImageOverlay} />
           </View>
+          
+          <View style={styles.heroContent}>
+            <CheflyLogo size={80} glowing />
+            <View style={styles.badgeContainer}>
+              <PremiumBadge />
+            </View>
 
-          <Text style={styles.heroTitle}>
-            Вдосконалюйте свій{' '}
-            <Text style={styles.heroTitleGold}>Смак</Text>
-          </Text>
-          <Text style={styles.heroSubtitle}>
-            Ваш приватний AI сомельє та кулінарний помічник.
-            Відчуйте унікальний гастрономічний досвід.
-          </Text>
+            <Text style={styles.heroTitle}>
+              Refine Your{' '}
+              <Text style={styles.heroTitleGold}>Taste</Text>
+            </Text>
+            <Text style={styles.heroSubtitle}>
+              Your private AI sommelier and culinary assistant.{'\n'}Experience unique gastronomic excellence.
+            </Text>
+          </View>
+        </View>
+
+        {/* Budget quick display */}
+        <View style={styles.budgetBar}>
+          <Ionicons name="wallet-outline" size={16} color={Colors.gold} />
+          <Text style={styles.budgetText}>Budget: 500 UAH</Text>
+          <TouchableOpacity onPress={() => router.push('/profile')}>
+            <Text style={styles.budgetEdit}>Edit</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Feature Tiles */}
@@ -112,14 +141,45 @@ export default function HomeScreen() {
           ))}
         </View>
 
+        {/* Quick Action Buttons */}
+        <View style={styles.quickActions}>
+          <TouchableOpacity 
+            style={styles.quickActionBtn}
+            onPress={() => router.push('/(tabs)/chat')}
+          >
+            <View style={styles.quickActionIcon}>
+              <Ionicons name="chatbubble-ellipses" size={24} color={Colors.gold} />
+            </View>
+            <Text style={styles.quickActionLabel}>Pair with Steak</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.quickActionBtn}
+            onPress={() => router.push('/(tabs)/chat')}
+          >
+            <View style={styles.quickActionIcon}>
+              <Ionicons name="wine" size={24} color={Colors.gold} />
+            </View>
+            <Text style={styles.quickActionLabel}>Best under 500</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.quickActionBtn}
+            onPress={() => router.push('/(tabs)/history')}
+          >
+            <View style={styles.quickActionIcon}>
+              <Ionicons name="time" size={24} color={Colors.gold} />
+            </View>
+            <Text style={styles.quickActionLabel}>History</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Privacy Card */}
         <DarkCard goldBorder style={styles.privacyCard}>
           <View style={styles.privacyContent}>
             <GoldIconBox icon="shield-outline" size={40} />
             <View style={styles.privacyText}>
-              <Text style={styles.privacyTitle}>Приватний AI Консьєрж</Text>
+              <Text style={styles.privacyTitle}>Private AI Concierge</Text>
               <Text style={styles.privacySubtitle}>
-                Ваші дані конфіденційні. Ми не зберігаємо ваші фото на серверах.
+                Your data is confidential. We don't store your photos on servers.
               </Text>
             </View>
           </View>
@@ -127,7 +187,7 @@ export default function HomeScreen() {
 
         {/* Premium Button */}
         <GoldOutlineButton
-          label="Отримати преміум доступ"
+          label="Get Premium Access"
           icon="diamond-outline"
           onPress={() => router.push('/premium')}
           style={styles.premiumButton}
@@ -148,14 +208,14 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.black,
   },
   scrollContent: {
-    padding: 20,
     paddingBottom: 40,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
   },
   headerLogo: {
     flexDirection: 'row',
@@ -182,12 +242,41 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     letterSpacing: 2,
   },
-  settingsButton: {
-    padding: 8,
+  headerRight: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.surfaceElevated,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   heroSection: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderRadius: 20,
+    overflow: 'hidden',
+    position: 'relative',
+    minHeight: 320,
+  },
+  heroImageContainer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  heroImage: {
+    width: '100%',
+    height: '100%',
+  },
+  heroImageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+  },
+  heroContent: {
     alignItems: 'center',
-    marginBottom: 32,
+    paddingVertical: 30,
+    paddingHorizontal: 20,
   },
   badgeContainer: {
     marginTop: 12,
@@ -211,7 +300,31 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginTop: 12,
   },
+  budgetBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  budgetText: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  budgetEdit: {
+    fontSize: 13,
+    color: Colors.gold,
+    fontWeight: '600',
+  },
   featuresSection: {
+    paddingHorizontal: 20,
     marginBottom: 20,
   },
   featureCard: {
@@ -245,7 +358,38 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     marginTop: 2,
   },
+  quickActions: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    gap: 10,
+    marginBottom: 20,
+  },
+  quickActionBtn: {
+    flex: 1,
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: 14,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  quickActionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.goldTransparent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  quickActionLabel: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
   privacyCard: {
+    marginHorizontal: 20,
     marginBottom: 16,
   },
   privacyContent: {
@@ -268,6 +412,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   premiumButton: {
+    marginHorizontal: 20,
     marginBottom: 24,
   },
   footer: {

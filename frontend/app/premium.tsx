@@ -6,59 +6,29 @@ import {
   SafeAreaView,
   ScrollView,
   TouchableOpacity,
+  Dimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../src/theme/colors';
 import { GoldButton } from '../src/components/GoldButton';
-import { PremiumBadge } from '../src/components/PremiumBadge';
+import IMAGES from '../src/constants/images';
 
-type PlanType = 'budget' | 'sommelier' | 'connoisseur';
+const { width } = Dimensions.get('window');
 
-const PLANS = [
-  {
-    id: 'budget' as PlanType,
-    icon: 'flash',
-    title: 'Розумний Бюджет',
-    price: '199 грн',
-    period: '/місяць',
-    features: [
-      'Порівняння цін',
-      'Бюджетні альтернативи',
-      'Обмежена кількість сканувань',
-    ],
-  },
-  {
-    id: 'sommelier' as PlanType,
-    icon: 'sparkles',
-    title: 'Приватний Сомельє',
-    price: '499 грн',
-    period: '/місяць',
-    features: [
-      'Безлімітне сканування',
-      'Розширений підбір страв',
-      'Пріоритетна підтримка',
-    ],
-    badge: 'НАЙПОПУЛЯРНІШИЙ',
-    trialText: 'Спробувати 7 днів безкоштовно',
-  },
-  {
-    id: 'connoisseur' as PlanType,
-    icon: 'shield',
-    title: 'Знавець',
-    price: '3 999 грн',
-    period: '/рік',
-    features: [
-      'Ексклюзивний доступ',
-      'Ранній доступ до функцій',
-      'Персоналізований погріб',
-    ],
-  },
+type PlanType = 'annual' | 'monthly';
+
+const FEATURES = [
+  { icon: 'scan-outline', title: 'Unlimited Shelf Scans', desc: 'Analyze entire store aisles instantly with AI precision' },
+  { icon: 'analytics-outline', title: 'Smart Budget AI', desc: 'Best $10 finds better than $50 competitors' },
+  { icon: 'restaurant-outline', title: 'Exclusive Pairings', desc: 'Exquisite healthy recipes tailored to your personal cellar' },
+  { icon: 'heart-outline', title: 'Calorie & Health Control', desc: 'Detailed nutritional statistics for every glass and pour' },
 ];
 
 export default function PremiumScreen() {
   const router = useRouter();
-  const [selectedPlan, setSelectedPlan] = useState<PlanType>('sommelier');
+  const [selectedPlan, setSelectedPlan] = useState<PlanType>('annual');
   const [isLoading, setIsLoading] = useState(false);
 
   const handlePurchase = async () => {
@@ -73,118 +43,123 @@ export default function PremiumScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
+        {/* Close button */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
             <Ionicons name="close" size={24} color={Colors.textSecondary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>ПРЕМІУМ ДОСТУП</Text>
-          <View style={{ width: 24 }} />
+        </View>
+
+        {/* Hero Image */}
+        <View style={styles.heroContainer}>
+          <Image
+            source={{ uri: IMAGES.premiumBottles }}
+            style={styles.heroImage}
+            contentFit="cover"
+          />
+          <View style={styles.heroOverlay} />
+          <View style={styles.heroOverlayBottom} />
+          
+          {/* Premium badge over image */}
+          <View style={styles.heroContent}>
+            <View style={styles.premiumBadge}>
+              <Ionicons name="diamond" size={14} color={Colors.black} />
+              <Text style={styles.premiumBadgeText}>CHEFLY PREMIUM</Text>
+            </View>
+            <Text style={styles.heroTitle}>CHEFLY PREMIUM</Text>
+            <Text style={styles.heroSubtitle}>
+              Your passport to the world of High gastronomy
+            </Text>
+          </View>
         </View>
 
         <View style={styles.content}>
-          {/* Badge */}
-          <View style={styles.badgeContainer}>
-            <PremiumBadge />
-          </View>
-
-          {/* Headline */}
-          <Text style={styles.headline}>Приєднуйтесь{"\n"}до еліти</Text>
-          <Text style={styles.subheadline}>
-            Розкрийте безмежний потенціал AI та отримайте{"\n"}поради приватного сомельє.
-          </Text>
+          {/* Features List */}
+          {FEATURES.map((feature, index) => (
+            <View key={index} style={styles.featureRow}>
+              <View style={styles.featureIcon}>
+                <Ionicons name={feature.icon as any} size={20} color={Colors.gold} />
+              </View>
+              <View style={styles.featureText}>
+                <Text style={styles.featureTitle}>{feature.title}</Text>
+                <Text style={styles.featureDesc}>{feature.desc}</Text>
+              </View>
+            </View>
+          ))}
 
           {/* Plan Cards */}
-          {PLANS.map((plan) => (
+          <View style={styles.plansSection}>
+            {/* Annual Plan */}
             <TouchableOpacity
-              key={plan.id}
-              style={[
-                styles.planCard,
-                selectedPlan === plan.id && styles.planCardActive,
-              ]}
-              onPress={() => setSelectedPlan(plan.id)}
+              style={[styles.planCard, selectedPlan === 'annual' && styles.planCardActive]}
+              onPress={() => setSelectedPlan('annual')}
               activeOpacity={0.8}
             >
-              {/* Plan Header */}
               <View style={styles.planHeader}>
-                <View style={[
-                  styles.planIcon,
-                  selectedPlan === plan.id && styles.planIconActive,
-                ]}>
-                  <Ionicons
-                    name={plan.icon as any}
-                    size={20}
-                    color={selectedPlan === plan.id ? Colors.black : Colors.textMuted}
-                  />
+                <View>
+                  <Text style={styles.planLabel}>ANNUAL ACCESS</Text>
+                  <View style={styles.priceRow}>
+                    <Text style={styles.planPrice}>$39.00</Text>
+                    <Text style={styles.planPeriod}>/year</Text>
+                  </View>
+                  <Text style={styles.planSavings}>$3.25 / month</Text>
                 </View>
-                <Text style={styles.planTitle}>{plan.title}</Text>
-                {plan.badge && (
-                  <View style={styles.planBadge}>
-                    <Text style={styles.planBadgeText}>{plan.badge}</Text>
+                {selectedPlan === 'annual' && (
+                  <View style={styles.bestValueBadge}>
+                    <Text style={styles.bestValueText}>BEST VALUE</Text>
                   </View>
                 )}
               </View>
-
-              {/* Price */}
-              <View style={styles.priceRow}>
-                <Text style={styles.price}>{plan.price}</Text>
-                <Text style={styles.period}>{plan.period}</Text>
+              <View style={[styles.radioOuter, selectedPlan === 'annual' && styles.radioOuterActive]}>
+                {selectedPlan === 'annual' && <View style={styles.radioInner} />}
               </View>
-
-              {/* Features */}
-              {plan.features.map((feature, idx) => (
-                <View key={idx} style={styles.featureRow}>
-                  <Ionicons
-                    name="checkmark-circle-outline"
-                    size={16}
-                    color={selectedPlan === plan.id ? Colors.gold : Colors.textMuted}
-                  />
-                  <Text style={[
-                    styles.featureText,
-                    selectedPlan === plan.id && styles.featureTextActive,
-                  ]}>
-                    {feature}
-                  </Text>
-                </View>
-              ))}
-
-              {/* Trial Button */}
-              {plan.trialText && selectedPlan === plan.id && (
-                <View style={styles.trialButton}>
-                  <Text style={styles.trialButtonText}>{plan.trialText}</Text>
-                </View>
-              )}
             </TouchableOpacity>
-          ))}
+
+            {/* Monthly Plan */}
+            <TouchableOpacity
+              style={[styles.planCard, selectedPlan === 'monthly' && styles.planCardActive]}
+              onPress={() => setSelectedPlan('monthly')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.planHeader}>
+                <View>
+                  <Text style={styles.planLabel}>MONTHLY</Text>
+                  <View style={styles.priceRow}>
+                    <Text style={styles.planPrice}>$5.99</Text>
+                    <Text style={styles.planPeriod}>/month</Text>
+                  </View>
+                  <Text style={styles.planSavings}>Cancel anytime</Text>
+                </View>
+              </View>
+              <View style={[styles.radioOuter, selectedPlan === 'monthly' && styles.radioOuterActive]}>
+                {selectedPlan === 'monthly' && <View style={styles.radioInner} />}
+              </View>
+            </TouchableOpacity>
+          </View>
 
           {/* CTA Button */}
           <GoldButton
-            label="Почати преміум доступ"
+            label="START 7-DAY FREE TRIAL"
             icon="diamond"
             onPress={handlePurchase}
             loading={isLoading}
             style={styles.ctaButton}
           />
 
-          {/* Restore */}
-          <TouchableOpacity style={styles.restoreButton}>
-            <Text style={styles.restoreText}>Відновити покупки</Text>
-          </TouchableOpacity>
-
           {/* Trial notice */}
           <View style={styles.noticeBox}>
             <Text style={styles.noticeText}>
-              Підписка поновлюється автоматично, якщо її не скасувати за 24 години до кінця пробного 7-денного безкоштовного тріалу.
+              Recurring billing. Cancel anytime in settings.
             </Text>
           </View>
 
           {/* Links */}
           <View style={styles.linksRow}>
             <TouchableOpacity>
-              <Text style={styles.linkText}>Умови використання</Text>
+              <Text style={styles.linkText}>Terms of Service</Text>
             </TouchableOpacity>
             <TouchableOpacity>
-              <Text style={styles.linkText}>Політика конфіденційності</Text>
+              <Text style={styles.linkText}>Privacy Policy</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -199,165 +174,207 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.black,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 10,
   },
-  headerTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.textSecondary,
+  closeBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroContainer: {
+    width: '100%',
+    height: 240,
+    position: 'relative',
+  },
+  heroImage: {
+    width: '100%',
+    height: '100%',
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  heroOverlayBottom: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  heroContent: {
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  premiumBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.gold,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+    marginBottom: 12,
+  },
+  premiumBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Colors.black,
+    letterSpacing: 1,
+  },
+  heroTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: Colors.gold,
+    fontFamily: 'Georgia',
     letterSpacing: 2,
+  },
+  heroSubtitle: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginTop: 6,
   },
   content: {
     padding: 20,
   },
-  badgeContainer: {
-    alignItems: 'center',
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     marginBottom: 20,
+    gap: 14,
   },
-  headline: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: Colors.gold,
-    textAlign: 'center',
-    fontFamily: 'Georgia',
-    lineHeight: 40,
+  featureIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: Colors.goldTransparent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.goldTransparent20,
   },
-  subheadline: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginTop: 12,
-    marginBottom: 28,
+  featureText: {
+    flex: 1,
+  },
+  featureTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    marginBottom: 4,
+  },
+  featureDesc: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    lineHeight: 18,
+  },
+  plansSection: {
+    marginTop: 8,
+    marginBottom: 20,
+    gap: 12,
   },
   planCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     backgroundColor: Colors.surfaceElevated,
-    borderRadius: 18,
-    padding: 20,
-    marginBottom: 14,
-    borderWidth: 1,
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1.5,
     borderColor: Colors.border,
   },
   planCardActive: {
     backgroundColor: Colors.goldTransparent,
-    borderColor: Colors.goldTransparent40,
-    shadowColor: Colors.gold,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    elevation: 5,
+    borderColor: Colors.gold,
   },
   planHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
-  },
-  planIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: Colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  planIconActive: {
-    backgroundColor: Colors.gold,
-  },
-  planTitle: {
+    gap: 12,
     flex: 1,
-    marginLeft: 12,
-    fontSize: 17,
-    fontWeight: '600',
+  },
+  planLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.gold,
+    letterSpacing: 1.5,
+    marginBottom: 4,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  planPrice: {
+    fontSize: 24,
+    fontWeight: '700',
     color: Colors.textPrimary,
     fontFamily: 'Georgia',
   },
-  planBadge: {
+  planPeriod: {
+    fontSize: 14,
+    color: Colors.textMuted,
+    marginLeft: 2,
+  },
+  planSavings: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  bestValueBadge: {
     backgroundColor: Colors.gold,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 20,
+    borderRadius: 12,
   },
-  planBadgeText: {
+  bestValueText: {
     fontSize: 9,
     fontWeight: '800',
     color: Colors.black,
     letterSpacing: 0.5,
   },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginBottom: 14,
-  },
-  price: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: Colors.gold,
-    fontFamily: 'Georgia',
-  },
-  period: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginLeft: 4,
-  },
-  featureRow: {
-    flexDirection: 'row',
+  radioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
-    gap: 8,
   },
-  featureText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
+  radioOuterActive: {
+    borderColor: Colors.gold,
   },
-  featureTextActive: {
-    color: Colors.textPrimary,
-  },
-  trialButton: {
-    marginTop: 12,
+  radioInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: Colors.gold,
-    borderRadius: 12,
-    padding: 14,
-    alignItems: 'center',
-  },
-  trialButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.black,
   },
   ctaButton: {
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  restoreButton: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  restoreText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    textDecorationLine: 'underline',
+    marginBottom: 12,
   },
   noticeBox: {
-    marginTop: 20,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
+    padding: 10,
+    alignItems: 'center',
   },
   noticeText: {
     fontSize: 12,
     color: Colors.textMuted,
     textAlign: 'center',
-    lineHeight: 18,
   },
   linksRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 24,
-    marginTop: 16,
+    marginTop: 8,
     marginBottom: 40,
   },
   linkText: {

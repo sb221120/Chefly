@@ -98,6 +98,18 @@ export const sendVoiceChat = async (
   return response.data;
 };
 
+// Google Cloud TTS - Wavenet voices for natural human-like speech
+export const synthesizeSpeech = async (
+  text: string,
+  language: string = 'uk-UA'
+) => {
+  const response = await api.post('/tts/synthesize', {
+    text,
+    language,
+  }, { timeout: 30000 });
+  return response.data;
+};
+
 export const scanBottle = async (
   userId: string,
   imageBase64: string,

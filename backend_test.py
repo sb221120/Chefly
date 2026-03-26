@@ -12,7 +12,7 @@ import sys
 import os
 
 # Backend URL from environment
-BACKEND_URL = "https://gemini-sommelier.preview.emergentagent.com/api"
+BACKEND_URL = "https://wine-scanner-3.preview.emergentagent.com/api"
 
 class CHEFLYAPITester:
     def __init__(self):
