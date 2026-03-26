@@ -34,8 +34,14 @@ interface Message {
   isVoice?: boolean;
 }
 
-// Elite sommelier prompt
-const SOMMELIER_PROMPT = `Ти — елітний сомельє. Відповідай КОРОТКО (2-3 речення), тепло, з людськими інтонаціями. Відповідай тією мовою, якою запитали.`;
+// Elite sommelier prompt — dynamic per language
+const getSommelierPrompt = (lang: string): string => {
+  switch (lang) {
+    case 'EN': return 'You are an elite sommelier. Answer BRIEFLY (2-3 sentences), warmly, with human intonations. Answer in ENGLISH only.';
+    case 'RU': return 'Ты — элитный сомелье. Отвечай КОРОТКО (2-3 предложения), тепло, с человеческими интонациями. Отвечай ТОЛЬКО на РУССКОМ.';
+    default: return 'Ти — елітний сомельє. Відповідай КОРОТКО (2-3 речення), тепло, з людськими інтонаціями. Відповідай ТІЛЬКИ УКРАЇНСЬКОЮ.';
+  }
+};
 
 // ============================================
 // 🎤 Web Speech Recognition
@@ -352,10 +358,11 @@ export default function ChatScreen() {
       const userId = await AsyncStorage.getItem('userId');
       if (!userId) throw new Error('User not found');
 
-      // Send to Gemini AI
+      // Send to Gemini AI with language-aware prompt
+      const prompt = getSommelierPrompt(userLanguage);
       const aiResponse = await api.sendChatMessage(
         userId,
-        `${SOMMELIER_PROMPT}\n\nЗапит: ${user_query}`,
+        `${prompt}\n\nЗапит: ${user_query}`,
         sessionId || undefined
       );
 
@@ -374,17 +381,18 @@ export default function ChatScreen() {
       setMessages(prev => [...prev, assistantMessage]);
       setIsProcessingAI(false);
 
-      // 4. Detect language for TTS
-      const detectLang = (text: string): string => {
-        if (/[іїєґ]/i.test(text)) return 'uk-UA';
-        if (/[ыэъ]/i.test(text) || /\b(что|как|это|для)\b/i.test(text)) return 'ru-RU';
-        if (/^[a-zA-Z\s.,!?'"()-]+$/.test(text.substring(0, 80))) return 'en-US';
-        return 'uk-UA';
+      // 4. Map TTS language from userLanguage setting
+      const ttsLangMap: Record<string, string> = { 'UK': 'uk-UA', 'EN': 'en-US', 'RU': 'ru-RU' };
+      const ttsLanguage = ttsLangMap[userLanguage] || 'uk-UA';
+
+      // Neural voice names per language for expo-speech fallback
+      const neuralVoiceMap: Record<string, string> = {
+        'uk-UA': 'uk-ua-x-hie-network',
+        'en-US': 'en-us-x-sfg-network',
+        'ru-RU': 'ru-ru-x-ruc-network',
       };
 
-      const ttsLanguage = detectLang(ai_answer);
-
-      // 5. Call Google Cloud TTS with Wavenet voice (fallback to expo-speech)
+      // 5. Call Google Cloud TTS with Wavenet voice (fallback to expo-speech with neural voice)
       setStatus('speaking');
       console.log('🔊 Requesting Google TTS...');
       
@@ -395,31 +403,34 @@ export default function ChatScreen() {
           console.log('🔊 Playing Wavenet audio...');
           await playAudio(ttsResponse.audio_base64);
         } else {
-          // Fallback to expo-speech when Google TTS is unavailable
-          console.log('🔊 Fallback to expo-speech');
+          // Fallback to expo-speech with neural voice
+          console.log('🔊 Fallback to expo-speech with neural voice');
           const Speech = require('expo-speech');
           const langMap: Record<string, string> = { 'uk-UA': 'uk', 'en-US': 'en', 'ru-RU': 'ru' };
           const cleanText = ai_answer.replace(/\*\*/g, '').replace(/[🍷🌡🍽⭐✨💫🎤🔊🥂🍾🍇🍎📷#•]/g, '').substring(0, 400);
           await new Promise<void>((resolve) => {
             Speech.speak(cleanText, {
               language: langMap[ttsLanguage] || 'uk',
+              voice: neuralVoiceMap[ttsLanguage] || undefined,
               pitch: 1.1,
-              rate: 0.95,
+              rate: 1.05,
               onDone: resolve,
               onError: () => resolve(),
             });
           });
         }
       } catch (ttsError) {
-        console.log('TTS error, using fallback:', ttsError);
+        console.log('TTS error, using neural fallback:', ttsError);
         const Speech = require('expo-speech');
+        const langMap: Record<string, string> = { 'uk-UA': 'uk', 'en-US': 'en', 'ru-RU': 'ru' };
         const cleanText = ai_answer.replace(/\*\*/g, '').replace(/[🍷🌡🍽⭐✨💫🎤🔊🥂🍾🍇🍎📷#•]/g, '').substring(0, 400);
         try {
           await new Promise<void>((resolve) => {
             Speech.speak(cleanText, {
-              language: 'uk',
+              language: langMap[ttsLanguage] || 'uk',
+              voice: neuralVoiceMap[ttsLanguage] || undefined,
               pitch: 1.1,
-              rate: 0.95,
+              rate: 1.05,
               onDone: resolve,
               onError: () => resolve(),
             });
@@ -529,15 +540,22 @@ export default function ChatScreen() {
         }]);
         setIsProcessingAI(false);
 
-        // Auto-speak with fallback
+        // Auto-speak with fallback using user language
+        const ttsLang: Record<string, string> = { 'UK': 'uk-UA', 'EN': 'en-US', 'RU': 'ru-RU' };
+        const imgTtsLang = ttsLang[userLanguage] || 'uk-UA';
+        const imgNeuralVoice: Record<string, string> = {
+          'uk-UA': 'uk-ua-x-hie-network',
+          'en-US': 'en-us-x-sfg-network',
+          'ru-RU': 'ru-ru-x-ruc-network',
+        };
         try {
-          const ttsResponse = await api.synthesizeSpeech(aiText, 'uk-UA');
+          const ttsResponse = await api.synthesizeSpeech(aiText, imgTtsLang);
           if (ttsResponse.audio_base64 && ttsResponse.success) {
             await playAudio(ttsResponse.audio_base64);
           } else {
             const Speech = require('expo-speech');
             const cleanText = aiText.replace(/\*\*/g, '').replace(/[🍷🌡🍽⭐✨💫📷#•]/g, '').substring(0, 400);
-            Speech.speak(cleanText, { language: 'uk', pitch: 1.1, rate: 0.95 });
+            Speech.speak(cleanText, { language: imgTtsLang.split('-')[0], voice: imgNeuralVoice[imgTtsLang] || undefined, pitch: 1.1, rate: 1.05 });
           }
         } catch (e) { /* silent TTS fail */ }
       }
