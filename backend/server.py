@@ -87,6 +87,12 @@ class ChatRequest(BaseModel):
     message: str
     image_base64: Optional[str] = None
 
+class VoiceChatRequest(BaseModel):
+    user_id: str
+    session_id: Optional[str] = None
+    audio_base64: str  # Base64 encoded audio
+    audio_format: str = "wav"  # audio format (wav, mp3, etc.)
+
 class ShelfScanRequest(BaseModel):
     user_id: str
     image_base64: str
@@ -240,6 +246,86 @@ async def chat_with_sommelier(request: ChatRequest):
         
     except Exception as e:
         logger.error(f"Chat error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/chat/voice")
+async def voice_chat_with_sommelier(request: VoiceChatRequest):
+    """Voice chat with AI Sommelier - processes audio and returns text response"""
+    try:
+        # Get or create chat session
+        if request.session_id:
+            session = await db.chat_sessions.find_one({"id": request.session_id})
+            if not session:
+                raise HTTPException(status_code=404, detail="Session not found")
+        else:
+            # Create new session
+            session = ChatSession(user_id=request.user_id).dict()
+            await db.chat_sessions.insert_one(session)
+        
+        # Voice prompt for sommelier - multilingual
+        voice_system_prompt = """Ти професійний сомельє з 20-річним стажем. Ти вмієш слухати.
+Відповідай мовою, якою до тебе звернулися (українська, англійська або російська).
+Уважно вислухай запит та дай чітку, експертну відповідь.
+Якщо користувач називає їжу — обов'язково запропонуй напій. Якщо напій — запропонуй страву.
+Твій стиль: елегантний, лаконічний, але пристрасний.
+Давай короткі та чіткі відповіді, які легко прочитати вголос."""
+        
+        # Create LLM chat instance with audio support
+        from emergentintegrations.llm.chat import AudioContent
+        
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=session["id"],
+            system_message=voice_system_prompt
+        ).with_model("gemini", "gemini-2.5-flash")
+        
+        # Prepare message with audio
+        audio_content = AudioContent(audio_base64=request.audio_base64)
+        user_message = UserMessage(
+            text="Прослухай та відповідай на запит користувача:",
+            audio_contents=[audio_content]
+        )
+        
+        # Send message and get response
+        response = await chat.send_message(user_message)
+        
+        # Try to extract user's transcribed text from response if available
+        # For now we'll use a placeholder for the user's text
+        user_text = "Голосове повідомлення"
+        
+        # Save messages to session
+        user_msg = {
+            "role": "user",
+            "text": user_text,
+            "is_voice": True,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        assistant_msg = {
+            "role": "assistant",
+            "text": response,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+        await db.chat_sessions.update_one(
+            {"id": session["id"]},
+            {
+                "$push": {"messages": {"$each": [user_msg, assistant_msg]}},
+                "$set": {
+                    "updated_at": datetime.utcnow(),
+                    "title": "Голосова консультація"
+                }
+            }
+        )
+        
+        return {
+            "session_id": session["id"],
+            "user_text": user_text,
+            "response": response,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Voice chat error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/chat/sessions/{user_id}")

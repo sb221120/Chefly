@@ -12,7 +12,9 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Scan wine shelves for AI recommendations",
-        "NSPhotoLibraryUsageDescription": "Select photos of wine bottles for analysis"
+        "NSPhotoLibraryUsageDescription": "Select photos of wine bottles for analysis",
+        "NSMicrophoneUsageDescription": "Voice commands for sommelier assistant",
+        "NSSpeechRecognitionUsageDescription": "Voice recognition for wine queries"
       }
     },
     "android": {
@@ -23,7 +25,8 @@
       "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE"
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -47,6 +50,12 @@
         {
           "photosPermission": "Allow CHEFLY to access your photos for wine analysis",
           "cameraPermission": "Allow CHEFLY to access your camera to scan wine shelves"
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow CHEFLY to use your microphone for voice commands"
         }
       ]
     ],
