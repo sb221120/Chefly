@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
 import Colors from '../src/theme/colors';
-import { LanguageProvider } from '../src/contexts/LanguageContext';
+import { LanguageProvider } from '../src/i18n/i18n';
 
 export default function RootLayout() {
   return (

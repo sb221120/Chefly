@@ -1,41 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Tabs } from 'expo-router';
 import { View, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../../src/theme/colors';
-import { Language, t } from '../../src/i18n/translations';
+import { useLanguage, translations } from '../../src/i18n/i18n';
 
 export default function TabLayout() {
-  const [currentLanguage, setCurrentLanguage] = useState<Language>('UK');
-
-  useEffect(() => {
-    loadLanguage();
-    
-    // Listen for language changes
-    const interval = setInterval(() => {
-      loadLanguage();
-    }, 500); // Check every 500ms for language changes
-    
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadLanguage = async () => {
-    try {
-      const saved = await AsyncStorage.getItem('userLanguage');
-      if (saved && (saved === 'UK' || saved === 'EN' || saved === 'RU')) {
-        if (saved !== currentLanguage) {
-          setCurrentLanguage(saved as Language);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load language:', error);
-    }
-  };
+  const { language } = useLanguage();
 
   return (
     <Tabs
-      key={currentLanguage} // Force re-render when language changes
       screenOptions={{
         headerShown: false,
         tabBarStyle: styles.tabBar,
@@ -48,7 +22,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: t('tab_chat', currentLanguage),
+          title: translations[language].tab_home,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'home' : 'home-outline'}
@@ -61,7 +35,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="scanner"
         options={{
-          title: t('tab_scanner', currentLanguage),
+          title: translations[language].tab_scanner,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'scan' : 'scan-outline'}
@@ -74,7 +48,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="chat"
         options={{
-          title: t('tab_chat', currentLanguage),
+          title: translations[language].tab_chat,
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.chatIconContainer, focused && styles.chatIconActive]}>
               <Ionicons
@@ -89,8 +63,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="history"
         options={{
-          title: t('tab_history', currentLanguage),
-          tabBarIcon: ({ color, focused}) => (
+          title: translations[language].tab_history,
+          tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'time' : 'time-outline'}
               size={22}
@@ -102,7 +76,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: t('tab_profile', currentLanguage),
+          title: translations[language].tab_profile,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'person' : 'person-outline'}
