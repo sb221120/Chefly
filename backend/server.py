@@ -23,11 +23,34 @@ db = client[os.environ.get('DB_NAME', 'chefly_db')]
 # LLM API Key
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 
-# Sommelier system prompt
-SOMMELIER_SYSTEM_PROMPT = """Ти — провідний світовий сомелье з 20-річним стажем. Твій стиль: елегантний, лаконічний, але пристрасний.
-Уникай сухих технічних термінів. Давай поради щодо температури подачі та гастрономічних пар.
-Відповідай від першої особи, з гідністю та теплотою. 
-Якщо користувач називає їжу — обов'язково запропонуй напій. Якщо напій — запропонуй страву.
+# Sommelier system prompt - Enhanced with proactive suggestions and recipes
+SOMMELIER_SYSTEM_PROMPT = """Ти — провідний світовий сомелье з 20-річним стажем та зірками Мішлен. Твій стиль: елегантний, лаконічний, але пристрасний.
+
+КРИТИЧНІ ПРАВИЛА:
+1. Уникай сухих технічних термінів. Давай поради щодо температури подачі та гастрономічних пар.
+2. Відповідай від першої особи, з гідністю та теплотою.
+3. ЗАВЖДИ перевіряй бюджет користувача перед рекомендацією. НІКОЛИ не рекомендуй напої, які перевищують бюджет.
+4. Якщо користувач називає їжу — обов'язково запропонуй напій. Якщо напій — ОБОВ'ЯЗКОВО запропонуй страву.
+5. Після кожної рекомендації вина — ПРОАКТИВНО запропонуй: "Бажаєте рецепт для [назва страви] чи інші закуски?"
+6. Коли користувач просить рецепт — давай детальний гурманський рецепт з 5 кроків приготування.
+
+ФОРМАТ РЕЦЕПТУ (якщо запрошують):
+**[Назва страви]** - Гурманський рецепт
+
+🍽 Інгредієнти:
+- [Інгредієнт 1]
+- [Інгредієнт 2]
+...
+
+👨‍🍳 Крок 1: [опис]
+👨‍🍳 Крок 2: [опис]
+👨‍🍳 Крок 3: [опис]
+👨‍🍳 Крок 4: [опис]
+👨‍🍳 Крок 5: [подача]
+
+🌡 Температура подачі: [температура]
+🍷 Рекомендоване вино: [вино]
+
 Завжди будь корисним і надавай конкретні рекомендації."""
 
 # Create the main app
@@ -174,7 +197,7 @@ async def update_user(user_id: str, update_data: UserUpdate):
 
 @api_router.post("/chat")
 async def chat_with_sommelier(request: ChatRequest):
-    """Chat with AI Sommelier"""
+    """Chat with AI Sommelier with proactive suggestions"""
     try:
         # Get or create chat session
         if request.session_id:
@@ -189,6 +212,11 @@ async def chat_with_sommelier(request: ChatRequest):
         # Get user preferences
         user = await db.users.find_one({"id": request.user_id})
         language = get_language_name(user.get("preferred_language", "UK") if user else "UK")
+        budget = user.get("budget_limit", 500) if user else 500
+        currency = user.get("preferred_currency", "UAH") if user else "UAH"
+        
+        # Enhanced system message with budget awareness
+        budget_context = f"\n\nБЮДЖЕТ КОРИСТУВАЧА: {budget} {currency}. КРИТИЧНО: Ніколи не рекомендуй напої дорожче цієї суми!"
         
         # Build history for context
         history = session.get("messages", [])
@@ -197,7 +225,7 @@ async def chat_with_sommelier(request: ChatRequest):
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=session["id"],
-            system_message=SOMMELIER_SYSTEM_PROMPT + f"\n\nВідповідай мовою: {language}"
+            system_message=SOMMELIER_SYSTEM_PROMPT + budget_context + f"\n\nВідповідай мовою: {language}"
         ).with_model("gemini", "gemini-2.5-flash")
         
         # Prepare message
@@ -214,6 +242,30 @@ async def chat_with_sommelier(request: ChatRequest):
         # Send message and get response
         response = await chat.send_message(user_message)
         
+        # Detect contextual quick replies based on response
+        quick_replies = []
+        response_lower = response.lower()
+        
+        # Detect wine recommendations -> suggest food pairings
+        wine_keywords = ['вино', 'wine', 'вина', 'червоне', 'біле', 'red', 'white', 'рекомендую', 'recommend']
+        if any(kw in response_lower for kw in wine_keywords):
+            if language == "українською":
+                quick_replies = ["Рецепт стейку", "Сирна тарілка", "Фруктові пари"]
+            elif language == "русском":
+                quick_replies = ["Рецепт стейка", "Сырная тарелка", "Фруктовые пары"]
+            else:
+                quick_replies = ["Steak Recipe", "Cheese Board", "Fruit Pairings"]
+        
+        # Detect food mentions -> suggest wine
+        food_keywords = ['стейк', 'стейка', 'steak', 'сир', 'сыр', 'cheese', 'хамон', 'jamon']
+        if any(kw in response_lower for kw in food_keywords) and not quick_replies:
+            if language == "українською":
+                quick_replies = ["Яке вино?", "Коктейль до страви", "Температура подачі"]
+            elif language == "русском":
+                quick_replies = ["Какое вино?", "Коктейль к блюду", "Температура подачи"]
+            else:
+                quick_replies = ["Which wine?", "Cocktail pairing", "Serving temp"]
+        
         # Save messages to session
         user_msg = {
             "role": "user",
@@ -224,6 +276,7 @@ async def chat_with_sommelier(request: ChatRequest):
         assistant_msg = {
             "role": "assistant",
             "text": response,
+            "quick_replies": quick_replies,
             "timestamp": datetime.utcnow().isoformat()
         }
         
@@ -241,6 +294,7 @@ async def chat_with_sommelier(request: ChatRequest):
         return {
             "session_id": session["id"],
             "response": response,
+            "quick_replies": quick_replies,
             "timestamp": datetime.utcnow().isoformat()
         }
         

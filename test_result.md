@@ -102,9 +102,93 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Test the CHEFLY API backend endpoints for user management, chat functionality with AI sommelier, and session management"
+user_problem_statement: "Fix and finalize the CHEFLY app with critical fixes: 1) Camera-first scanner, 2) Seamless voice-to-voice, 3) Proactive AI sommelier with recipes, 4) Global language sync, 5) Budget-aware advice"
 
 backend:
+  - task: "Enhanced AI Sommelier System Prompt"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Updated SOMMELIER_SYSTEM_PROMPT to include proactive food pairing suggestions, detailed recipes, and stronger budget constraints"
+  
+  - task: "Budget-Aware Chat Endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Enhanced /api/chat endpoint to include user budget in AI context and return quick_replies for contextual suggestions"
+
+frontend:
+  - task: "Global Language Context (LanguageContext)"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/contexts/LanguageContext.tsx, /app/frontend/app/_layout.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Created LanguageContext with React Context API + AsyncStorage for global language state (UK/EN/RU) that syncs across all screens and AI responses"
+  
+  - task: "Camera-First Scanner"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/(tabs)/scanner.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Refactored scanner to use camera first with expo-camera. Added gallery icon button in corner as secondary option. Integrated language context for UI translations."
+  
+  - task: "Seamless Voice-to-Voice Chat"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/(tabs)/chat.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Fixed voice-to-voice flow to be fully automatic: OnSpeechEnd -> Gemini API -> TTS. Uses global language context for voice selection (uk-ua/en-us/ru-ru). Removed manual prompt injection."
+  
+  - task: "Contextual Quick-Action Buttons"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/(tabs)/chat.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Added quick_replies UI that displays contextual suggestion buttons after AI responses (e.g., 'Steak Recipe', 'Cheese Board', 'Fruit Pairings'). Buttons auto-send message on tap."
+  
+  - task: "Profile Language Sync"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/(tabs)/profile.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Updated profile screen to use global LanguageContext. Language changes now sync immediately across entire app and update AI responses."
   - task: "Health Check Endpoint"
     implemented: true
     working: true

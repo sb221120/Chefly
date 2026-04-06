@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { Camera, CameraType } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../../src/theme/colors';
@@ -20,26 +21,40 @@ import { GoldButton, GoldOutlineButton } from '../../src/components/GoldButton';
 import { DarkCard } from '../../src/components/DarkCard';
 import IMAGES from '../../src/constants/images';
 import * as api from '../../src/services/api';
+import { useLanguage } from '../../src/contexts/LanguageContext';
 
 const { width } = Dimensions.get('window');
 
 const SCAN_TIPS = [
-  'Hold camera steady for best results',
-  'Ensure good lighting conditions',
-  'Avoid reflections on glass',
-  'Keep the label centered in frame',
+  { UK: 'Тримайте камеру стабільно для кращих результатів', EN: 'Hold camera steady for best results', RU: 'Держите камеру стабильно для лучших результатов' },
+  { UK: 'Забезпечте хороше освітлення', EN: 'Ensure good lighting conditions', RU: 'Обеспечьте хорошее освещение' },
+  { UK: 'Уникайте відблисків на склі', EN: 'Avoid reflections on glass', RU: 'Избегайте отблесков на стекле' },
+  { UK: 'Тримайте етикетку в центрі кадру', EN: 'Keep the label centered in frame', RU: 'Держите этикетку в центре кадра' },
 ];
 
 export default function ScannerScreen() {
   const router = useRouter();
+  const { language, t } = useLanguage();
   const [image, setImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [budget, setBudget] = useState(500);
   const [currency, setCurrency] = useState('UAH');
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const cameraRef = useRef<Camera>(null);
 
   useEffect(() => {
     loadUserPreferences();
+    requestCameraPermission();
   }, []);
+
+  const requestCameraPermission = async () => {
+    const { status } = await Camera.requestCameraPermissionsAsync();
+    setHasPermission(status === 'granted');
+    if (status === 'granted') {
+      setShowCamera(true);
+    }
+  };
 
   const loadUserPreferences = async () => {
     try {
@@ -54,35 +69,43 @@ export default function ScannerScreen() {
     }
   };
 
-  const pickImage = async (useCamera: boolean) => {
+  const takePicture = async () => {
+    if (cameraRef.current) {
+      try {
+        const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.8 });
+        if (photo.base64) {
+          setImage(photo.base64);
+          setShowCamera(false);
+        }
+      } catch (error) {
+        console.error('Camera error:', error);
+        Alert.alert(t('scanner_error'), t('scanner_error_message'));
+      }
+    }
+  };
+
+  const pickFromGallery = async () => {
     try {
-      const permissionResult = useCamera
-        ? await ImagePicker.requestCameraPermissionsAsync()
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (!permissionResult.granted) {
-        Alert.alert('Error', 'Permission is required');
+        Alert.alert(t('scanner_error'), t('scanner_permission_error'));
         return;
       }
 
-      const result = useCamera
-        ? await ImagePicker.launchCameraAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            quality: 0.8,
-            base64: true,
-          })
-        : await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            quality: 0.8,
-            base64: true,
-          });
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+        base64: true,
+      });
 
-      if (!result.canceled && result.assets[0]) {
-        setImage(result.assets[0].base64 || null);
+      if (!result.canceled && result.assets[0]?.base64) {
+        setImage(result.assets[0].base64);
+        setShowCamera(false);
       }
     } catch (error) {
-      console.error('Image picker error:', error);
-      Alert.alert('Error', 'Failed to select photo');
+      console.error('Gallery picker error:', error);
+      Alert.alert(t('scanner_error'), t('scanner_error_message'));
     }
   };
 
@@ -94,7 +117,7 @@ export default function ScannerScreen() {
       const userId = await AsyncStorage.getItem('userId');
       
       if (!userId) {
-        Alert.alert('Error', 'User not found');
+        Alert.alert(t('scanner_error'), t('scanner_user_not_found'));
         return;
       }
 
@@ -103,7 +126,7 @@ export default function ScannerScreen() {
         image,
         budget,
         currency,
-        'UK'
+        language
       );
 
       // Navigate to results
@@ -117,7 +140,7 @@ export default function ScannerScreen() {
       });
     } catch (error) {
       console.error('Analysis error:', error);
-      Alert.alert('Error', 'Failed to analyze. Please try again.');
+      Alert.alert(t('scanner_error'), t('scanner_error_message'));
     } finally {
       setIsAnalyzing(false);
     }
@@ -130,7 +153,7 @@ export default function ScannerScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={Colors.textSecondary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>SHELF SCANNER</Text>
+        <Text style={styles.headerTitle}>{t('scanner_title')}</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -138,17 +161,32 @@ export default function ScannerScreen() {
         {/* Budget display */}
         <View style={styles.budgetSection}>
           <View>
-            <Text style={styles.budgetLabel}>CURRENT BUDGET</Text>
-            <Text style={styles.budgetSubtext}>Find bottles within your range</Text>
+            <Text style={styles.budgetLabel}>{t('scanner_budget_label')}</Text>
+            <Text style={styles.budgetSubtext}>{t('scanner_budget_hint')}</Text>
           </View>
           <Text style={styles.budgetValue}>
             {budget} {currency}
           </Text>
         </View>
 
-        {/* Image preview area */}
+        {/* Camera/Image preview area */}
         <View style={styles.previewContainer}>
-          {image ? (
+          {showCamera && hasPermission && !image ? (
+            <View style={styles.cameraContainer}>
+              <Camera
+                ref={cameraRef}
+                style={styles.camera}
+                type={CameraType.back}
+              />
+              {/* Gallery icon button in corner */}
+              <TouchableOpacity
+                style={styles.galleryIconButton}
+                onPress={pickFromGallery}
+              >
+                <Ionicons name="images" size={24} color={Colors.gold} />
+              </TouchableOpacity>
+            </View>
+          ) : image ? (
             <Image
               source={{ uri: `data:image/jpeg;base64,${image}` }}
               style={styles.previewImage}
@@ -173,7 +211,7 @@ export default function ScannerScreen() {
               </View>
               
               <Text style={styles.placeholderText}>
-                Point camera at wine shelf
+                {t('scanner_placeholder')}
               </Text>
             </View>
           )}
@@ -186,34 +224,38 @@ export default function ScannerScreen() {
         </View>
 
         {/* Action buttons */}
-        {!image ? (
-          <View style={styles.actionButtons}>
-            <GoldOutlineButton
-              label="Gallery"
-              icon="images-outline"
-              onPress={() => pickImage(false)}
-              style={styles.actionButton}
+        {!image && showCamera && hasPermission ? (
+          <View style={styles.captureSection}>
+            <GoldButton
+              label={t('scanner_camera')}
+              icon="camera"
+              onPress={takePicture}
             />
-            <GoldOutlineButton
-              label="Camera"
-              icon="camera-outline"
-              onPress={() => pickImage(true)}
-              style={styles.actionButton}
+          </View>
+        ) : !image ? (
+          <View style={styles.actionButtons}>
+            <GoldButton
+              label={t('scanner_camera')}
+              icon="camera"
+              onPress={() => setShowCamera(true)}
             />
           </View>
         ) : (
           <View style={styles.analyzeButtons}>
             <GoldButton
-              label={isAnalyzing ? 'Analyzing...' : 'Analyze Shelf'}
+              label={isAnalyzing ? t('scanner_analyzing') : t('scanner_analyze')}
               icon="sparkles"
               onPress={analyzeShelf}
               loading={isAnalyzing}
             />
             <TouchableOpacity
               style={styles.resetButton}
-              onPress={() => setImage(null)}
+              onPress={() => {
+                setImage(null);
+                setShowCamera(true);
+              }}
             >
-              <Text style={styles.resetText}>Reset</Text>
+              <Text style={styles.resetText}>{t('scanner_reset')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -222,12 +264,12 @@ export default function ScannerScreen() {
         <DarkCard style={styles.tipsCard}>
           <View style={styles.tipsHeader}>
             <Ionicons name="information-circle-outline" size={16} color={Colors.gold} />
-            <Text style={styles.tipsTitle}>SCANNING PROTOCOL</Text>
+            <Text style={styles.tipsTitle}>{t('scanner_tips_title')}</Text>
           </View>
           {SCAN_TIPS.map((tip, index) => (
             <View key={index} style={styles.tipRow}>
               <View style={styles.tipDot} />
-              <Text style={styles.tipText}>{tip}</Text>
+              <Text style={styles.tipText}>{tip[language as 'UK' | 'EN' | 'RU']}</Text>
             </View>
           ))}
         </DarkCard>
@@ -293,6 +335,28 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  cameraContainer: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+  },
+  camera: {
+    width: '100%',
+    height: '100%',
+  },
+  galleryIconButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: Colors.gold,
   },
   previewImage: {
     width: '100%',
@@ -373,9 +437,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2.5,
     borderRightWidth: 2.5,
   },
+  captureSection: {
+    marginBottom: 20,
+  },
   actionButtons: {
-    flexDirection: 'row',
-    gap: 12,
     marginBottom: 20,
   },
   actionButton: {

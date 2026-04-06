@@ -20,6 +20,7 @@ import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../../src/theme/colors';
 import * as api from '../../src/services/api';
+import { useLanguage } from '../../src/contexts/LanguageContext';
 
 // ============================================
 // 🎭 VOICE-TO-VOICE AI SOMMELIER
@@ -32,16 +33,8 @@ interface Message {
   text: string;
   timestamp: Date;
   isVoice?: boolean;
+  quick_replies?: string[];
 }
-
-// Elite sommelier prompt — dynamic per language
-const getSommelierPrompt = (lang: string): string => {
-  switch (lang) {
-    case 'EN': return 'You are an elite sommelier. Answer BRIEFLY (2-3 sentences), warmly, with human intonations. Answer in ENGLISH only.';
-    case 'RU': return 'Ты — элитный сомелье. Отвечай КОРОТКО (2-3 предложения), тепло, с человеческими интонациями. Отвечай ТОЛЬКО на РУССКОМ.';
-    default: return 'Ти — елітний сомельє. Відповідай КОРОТКО (2-3 речення), тепло, з людськими інтонаціями. Відповідай ТІЛЬКИ УКРАЇНСЬКОЮ.';
-  }
-};
 
 // ============================================
 // 🎤 Web Speech Recognition
@@ -280,12 +273,12 @@ const VoiceButton = ({
 // 🎭 Main Chat Screen
 // ============================================
 export default function ChatScreen() {
+  const { language, t } = useLanguage();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessingAI, setIsProcessingAI] = useState(false);
-  const [userLanguage, setUserLanguage] = useState('UK');
   const [status, setStatus] = useState<string>('ready');
   
   const scrollViewRef = useRef<ScrollView>(null);
@@ -294,16 +287,16 @@ export default function ChatScreen() {
   const { isPlaying, playAudio, stopAudio } = useGoogleTTS();
 
   useEffect(() => {
+    const welcomeMsg = t('chat_welcome');
     setMessages([{
       id: '1',
       role: 'assistant',
-      text: 'Вітаю! Я ваш персональний сомельє.\n\n🎤 Натисніть мікрофон → скажіть запит → я ОДРАЗУ відповім живим голосом!',
+      text: welcomeMsg,
       timestamp: new Date(),
     }]);
-    loadUserPreferences();
-  }, []);
+  }, [language]);
 
-  // Auto-process when speech recognition is final
+  // Auto-process when speech recognition is final - SEAMLESS VOICE-TO-VOICE
   useEffect(() => {
     if (isFinal && transcript && !isProcessingAI) {
       runVoiceToVoice(transcript);
@@ -317,18 +310,8 @@ export default function ChatScreen() {
     if (transcript) setInputText(transcript);
   }, [interimTranscript, transcript, isListening]);
 
-  const loadUserPreferences = async () => {
-    try {
-      const userId = await AsyncStorage.getItem('userId');
-      if (userId) {
-        const user = await api.getUser(userId);
-        setUserLanguage(user.preferred_language || 'UK');
-      }
-    } catch (error) {}
-  };
-
   // ============================================
-  // 🎭 VOICE-TO-VOICE ORCHESTRATOR
+  // 🎭 VOICE-TO-VOICE ORCHESTRATOR - SEAMLESS AUTOMATIC FLOW
   // ============================================
   const runVoiceToVoice = async (user_query: string) => {
     if (!user_query.trim()) return;
@@ -358,32 +341,33 @@ export default function ChatScreen() {
       const userId = await AsyncStorage.getItem('userId');
       if (!userId) throw new Error('User not found');
 
-      // Send to Gemini AI with language-aware prompt
-      const prompt = getSommelierPrompt(userLanguage);
+      // Send to Gemini AI (backend now handles language and budget)
       const aiResponse = await api.sendChatMessage(
         userId,
-        `${prompt}\n\nЗапит: ${user_query}`,
+        user_query,
         sessionId || undefined
       );
 
       if (!sessionId && aiResponse.session_id) setSessionId(aiResponse.session_id);
 
       const ai_answer = aiResponse.response;
+      const quick_replies = aiResponse.quick_replies || [];
       console.log('🧠 AI Answer:', ai_answer.substring(0, 100));
 
-      // 3. Add AI response to chat
+      // 3. Add AI response to chat with quick replies
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         text: ai_answer,
         timestamp: new Date(),
+        quick_replies: quick_replies,
       };
       setMessages(prev => [...prev, assistantMessage]);
       setIsProcessingAI(false);
 
-      // 4. Map TTS language from userLanguage setting
+      // 4. Map TTS language from global language setting
       const ttsLangMap: Record<string, string> = { 'UK': 'uk-UA', 'EN': 'en-US', 'RU': 'ru-RU' };
-      const ttsLanguage = ttsLangMap[userLanguage] || 'uk-UA';
+      const ttsLanguage = ttsLangMap[language] || 'uk-UA';
 
       // Neural voice names per language for expo-speech fallback
       const neuralVoiceMap: Record<string, string> = {
@@ -392,7 +376,7 @@ export default function ChatScreen() {
         'ru-RU': 'ru-ru-x-ruc-network',
       };
 
-      // 5. Call Google Cloud TTS with Wavenet voice (fallback to expo-speech with neural voice)
+      // 5. AUTOMATIC TTS - Call Google Cloud TTS with Wavenet voice (fallback to expo-speech with neural voice)
       setStatus('speaking');
       console.log('🔊 Requesting Google TTS...');
       
@@ -400,7 +384,7 @@ export default function ChatScreen() {
         const ttsResponse = await api.synthesizeSpeech(ai_answer, ttsLanguage);
         
         if (ttsResponse.audio_base64 && ttsResponse.success) {
-          console.log('🔊 Playing Wavenet audio...');
+          console.log('🔊 Playing Wavenet audio automatically...');
           await playAudio(ttsResponse.audio_base64);
         } else {
           // Fallback to expo-speech with neural voice
@@ -442,7 +426,7 @@ export default function ChatScreen() {
 
     } catch (error) {
       console.error('❌ Voice-to-Voice error:', error);
-      Alert.alert('Помилка', 'Не вдалося обробити запит');
+      Alert.alert(t('chat_error'), t('chat_error_message'));
       setIsProcessingAI(false);
       setStatus('ready');
     }
@@ -467,9 +451,9 @@ export default function ChatScreen() {
         setIsRecording(true);
         setStatus('listening');
         setInputText('');
-        startListening(userLanguage);
+        startListening(language);
       } else {
-        Alert.alert('Голосовий ввід', 'Використайте браузер Chrome');
+        Alert.alert(t('chat_voice_browser'), t('chat_voice_browser'));
       }
     }
   };
@@ -501,9 +485,10 @@ export default function ChatScreen() {
         role: 'assistant',
         text: response.response,
         timestamp: new Date(),
+        quick_replies: response.quick_replies || [],
       }]);
     } catch (error) {
-      Alert.alert('Помилка', 'Не вдалося отримати відповідь');
+      Alert.alert(t('chat_error'), t('chat_error_message'));
     } finally {
       setIsProcessingAI(false);
     }
@@ -535,14 +520,19 @@ export default function ChatScreen() {
         );
 
         const aiText = response.response;
+        const quick_replies = response.quick_replies || [];
         setMessages(prev => [...prev, {
-          id: (Date.now() + 1).toString(), role: 'assistant', text: aiText, timestamp: new Date(),
+          id: (Date.now() + 1).toString(), 
+          role: 'assistant', 
+          text: aiText, 
+          timestamp: new Date(),
+          quick_replies: quick_replies,
         }]);
         setIsProcessingAI(false);
 
-        // Auto-speak with fallback using user language
+        // Auto-speak with fallback using global language
         const ttsLang: Record<string, string> = { 'UK': 'uk-UA', 'EN': 'en-US', 'RU': 'ru-RU' };
-        const imgTtsLang = ttsLang[userLanguage] || 'uk-UA';
+        const imgTtsLang = ttsLang[language] || 'uk-UA';
         const imgNeuralVoice: Record<string, string> = {
           'uk-UA': 'uk-ua-x-hie-network',
           'en-US': 'en-us-x-sfg-network',
@@ -566,10 +556,10 @@ export default function ChatScreen() {
 
   const getStatusText = () => {
     switch (status) {
-      case 'listening': return '🎤 Слухаю...';
-      case 'thinking': return '🧠 Думаю...';
-      case 'speaking': return '🔊 Говорю...';
-      default: return '● Готовий';
+      case 'listening': return t('chat_listening');
+      case 'thinking': return t('chat_thinking');
+      case 'speaking': return t('chat_speaking');
+      default: return t('chat_ready');
     }
   };
 
@@ -584,7 +574,7 @@ export default function ChatScreen() {
             <Text style={styles.avatarText}>C</Text>
           </Animated.View>
           <View>
-            <Text style={styles.headerTitle}>CHEFLY</Text>
+            <Text style={styles.headerTitle}>{t('chat_title')}</Text>
             <Text style={[styles.headerSubtitle, status !== 'ready' && styles.activeStatus]}>
               {getStatusText()}
             </Text>
@@ -603,7 +593,7 @@ export default function ChatScreen() {
           <View style={styles.soundWave}>
             {[1,2,3,4,5].map(i => <View key={i} style={[styles.soundBar, { height: 6 + Math.random() * 16 }]} />)}
           </View>
-          <Text style={styles.recordingText}>Говоріть зараз...</Text>
+          <Text style={styles.recordingText}>{t('chat_speaking_now')}</Text>
         </View>
       )}
 
@@ -615,15 +605,34 @@ export default function ChatScreen() {
         onContentSizeChange={() => scrollViewRef.current?.scrollToEnd()}
       >
         {messages.map(msg => (
-          <View key={msg.id} style={[styles.bubble, msg.role === 'user' ? styles.userBubble : styles.aiBubble]}>
-            {msg.isVoice && <Ionicons name="mic" size={14} color={Colors.goldDark} style={styles.voiceIcon} />}
-            <Text style={[styles.bubbleText, msg.role === 'user' && styles.userText]}>{msg.text}</Text>
+          <View key={msg.id}>
+            <View style={[styles.bubble, msg.role === 'user' ? styles.userBubble : styles.aiBubble]}>
+              {msg.isVoice && <Ionicons name="mic" size={14} color={Colors.goldDark} style={styles.voiceIcon} />}
+              <Text style={[styles.bubbleText, msg.role === 'user' && styles.userText]}>{msg.text}</Text>
+            </View>
+            
+            {/* Quick Action Buttons (Contextual Suggestions) */}
+            {msg.role === 'assistant' && msg.quick_replies && msg.quick_replies.length > 0 && (
+              <View style={styles.quickRepliesContainer}>
+                {msg.quick_replies.map((reply, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={styles.quickReplyBtn}
+                    onPress={() => sendTextMessage(reply)}
+                    disabled={isProcessingAI || isVoiceActive}
+                  >
+                    <Ionicons name="sparkles-outline" size={14} color={Colors.gold} />
+                    <Text style={styles.quickReplyText}>{reply}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
         ))}
         {isProcessingAI && (
           <View style={styles.loadingBubble}>
             <ActivityIndicator size="small" color={Colors.gold} />
-            <Text style={styles.loadingText}>Сомельє думає...</Text>
+            <Text style={styles.loadingText}>{t('chat_sommelier_thinking')}</Text>
           </View>
         )}
       </ScrollView>
@@ -631,7 +640,7 @@ export default function ChatScreen() {
       {/* Quick Prompts */}
       {messages.length <= 1 && !isVoiceActive && (
         <View style={styles.quickPrompts}>
-          {['Вино до стейку', 'Що до сиру?', 'Коктейль'].map((label, i) => (
+          {[t('quick_wine_to_steak'), t('quick_wine_to_cheese'), t('quick_cocktail')].map((label, i) => (
             <TouchableOpacity key={i} style={styles.promptBtn} onPress={() => runVoiceToVoice(label)}>
               <Text style={styles.promptText}>{label}</Text>
             </TouchableOpacity>
@@ -648,7 +657,7 @@ export default function ChatScreen() {
           
           <TextInput
             style={[styles.textInput, isVoiceActive && styles.textInputActive]}
-            placeholder={isVoiceActive ? "Слухаю..." : "Напишіть або 🎤"}
+            placeholder={isVoiceActive ? t('chat_listening_placeholder') : t('chat_placeholder')}
             placeholderTextColor={isVoiceActive ? Colors.gold : Colors.textMuted}
             value={inputText}
             onChangeText={setInputText}
@@ -722,6 +731,30 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceElevated, padding: 14, borderRadius: 20, gap: 10,
   },
   loadingText: { fontSize: 14, color: Colors.gold, fontStyle: 'italic' },
+  quickRepliesContainer: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    gap: 8, 
+    marginTop: 8, 
+    marginLeft: 8,
+    marginBottom: 8,
+  },
+  quickReplyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceElevated,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.gold,
+    gap: 6,
+  },
+  quickReplyText: {
+    fontSize: 12,
+    color: Colors.gold,
+    fontWeight: '500',
+  },
   quickPrompts: { flexDirection: 'row', paddingHorizontal: 16, paddingBottom: 10, gap: 8 },
   promptBtn: {
     backgroundColor: Colors.surfaceElevated, paddingHorizontal: 14, paddingVertical: 10,

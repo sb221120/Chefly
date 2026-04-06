@@ -19,6 +19,7 @@ import { DarkCard } from '../../src/components/DarkCard';
 import { GoldButton } from '../../src/components/GoldButton';
 import IMAGES from '../../src/constants/images';
 import * as api from '../../src/services/api';
+import { useLanguage } from '../../src/contexts/LanguageContext';
 
 const { width } = Dimensions.get('window');
 
@@ -43,7 +44,7 @@ const MENU_ITEMS = [
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const [language, setLanguage] = useState('UK');
+  const { language: globalLanguage, setLanguage: setGlobalLanguage, t } = useLanguage();
   const [currency, setCurrency] = useState('UAH');
   const [budget, setBudget] = useState(500);
   const [notifications, setNotifications] = useState(true);
@@ -60,39 +61,46 @@ export default function ProfileScreen() {
       
       if (id) {
         const user = await api.getUser(id);
-        setLanguage(user.preferred_language || 'UK');
         setCurrency(user.preferred_currency || 'UAH');
         setBudget(user.budget_limit || 500);
+        // Sync language from backend to context
+        if (user.preferred_language) {
+          await setGlobalLanguage(user.preferred_language as 'UK' | 'EN' | 'RU');
+        }
       }
     } catch (error) {
       console.error('Error loading user data:', error);
     }
   };
 
+  const handleLanguageChange = async (newLang: 'UK' | 'EN' | 'RU') => {
+    await setGlobalLanguage(newLang);
+  };
+
   const saveSettings = async () => {
     try {
       if (userId) {
         await api.updateUser(userId, {
-          preferred_language: language,
+          preferred_language: globalLanguage,
           preferred_currency: currency,
           budget_limit: budget,
         });
-        Alert.alert('Збережено', 'Налаштування збережено');
+        Alert.alert(t('profile_settings_saved'), t('profile_settings_saved_message'));
       }
     } catch (error) {
       console.error('Error saving settings:', error);
-      Alert.alert('Помилка', 'Не вдалося зберегти');
+      Alert.alert(t('profile_error'), t('profile_error_message'));
     }
   };
 
   const handleLogout = async () => {
     Alert.alert(
-      'Вихід',
-      'Ви впевнені, що хочете вийти?',
+      t('profile_logout_title'),
+      t('profile_logout_message'),
       [
-        { text: 'Скасувати', style: 'cancel' },
+        { text: t('profile_cancel'), style: 'cancel' },
         {
-          text: 'Вийти',
+          text: t('profile_logout'),
           style: 'destructive',
           onPress: async () => {
             await AsyncStorage.removeItem('isOnboarded');
@@ -104,12 +112,19 @@ export default function ProfileScreen() {
     );
   };
 
+  const MENU_ITEMS = [
+    { icon: 'scan-outline', title: t('profile_scan_history'), subtitle: t('profile_scan_history_subtitle'), route: '/(tabs)/history' },
+    { icon: 'notifications-outline', title: t('profile_notifications'), subtitle: t('profile_notifications_subtitle'), route: null },
+    { icon: 'shield-outline', title: t('profile_privacy'), subtitle: t('profile_privacy_subtitle'), route: null },
+    { icon: 'help-circle-outline', title: t('profile_support'), subtitle: t('profile_support_subtitle'), route: null },
+  ];
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header with Profile */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Profile</Text>
+          <Text style={styles.headerTitle}>{t('profile_title')}</Text>
         </View>
 
         {/* Premium Card with Avatar */}
@@ -131,22 +146,22 @@ export default function ProfileScreen() {
           
           <View style={styles.premiumBadge}>
             <Ionicons name="diamond" size={12} color={Colors.black} />
-            <Text style={styles.premiumBadgeText}>PREMIUM MEMBER</Text>
+            <Text style={styles.premiumBadgeText}>{t('profile_premium_member')}</Text>
           </View>
           
-          <Text style={styles.userName}>Unlimited AI Scans</Text>
-          <Text style={styles.userMeta}>Valid until Oct 2026</Text>
+          <Text style={styles.userName}>{t('profile_unlimited_scans')}</Text>
+          <Text style={styles.userMeta}>{t('profile_valid_until')}</Text>
         </View>
 
         <View style={styles.content}>
           {/* Preferences Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>PREFERENCES</Text>
+            <Text style={styles.sectionTitle}>{t('profile_preferences')}</Text>
             
             {/* Default Budget */}
             <DarkCard padding={16} style={styles.card}>
               <View style={styles.budgetHeader}>
-                <Text style={styles.budgetLabel}>Default Budget</Text>
+                <Text style={styles.budgetLabel}>{t('profile_budget_label')}</Text>
                 <Text style={styles.budgetValue}>
                   {budget} {CURRENCIES.find(c => c.code === currency)?.symbol}
                 </Text>
@@ -159,14 +174,14 @@ export default function ProfileScreen() {
                 </View>
                 <Text style={styles.sliderMax}>$1,000+</Text>
               </View>
-              <Text style={styles.budgetHint}>This budget will be used as a default filter for all shelf scans.</Text>
+              <Text style={styles.budgetHint}>{t('profile_budget_hint')}</Text>
             </DarkCard>
           </View>
 
           {/* Currency & Language */}
           <View style={styles.rowSection}>
             <View style={styles.halfSection}>
-              <Text style={styles.sectionTitle}>Currency</Text>
+              <Text style={styles.sectionTitle}>{t('profile_currency')}</Text>
               <View style={styles.currencyGrid}>
                 {CURRENCIES.map((curr) => (
                   <TouchableOpacity
@@ -185,22 +200,22 @@ export default function ProfileScreen() {
               </View>
             </View>
             <View style={styles.halfSection}>
-              <Text style={styles.sectionTitle}>Language</Text>
+              <Text style={styles.sectionTitle}>{t('profile_language')}</Text>
               <DarkCard padding={4}>
                 {LANGUAGES.map((lang, index) => (
                   <TouchableOpacity
                     key={lang.code}
                     style={[
                       styles.langItem,
-                      language === lang.code && styles.langItemActive,
+                      globalLanguage === lang.code && styles.langItemActive,
                       index < LANGUAGES.length - 1 && styles.langItemBorder,
                     ]}
-                    onPress={() => setLanguage(lang.code)}
+                    onPress={() => handleLanguageChange(lang.code as 'UK' | 'EN' | 'RU')}
                   >
-                    <Text style={[styles.langText, language === lang.code && styles.langTextActive]}>
+                    <Text style={[styles.langText, globalLanguage === lang.code && styles.langTextActive]}>
                       {lang.name}
                     </Text>
-                    {language === lang.code && <Ionicons name="checkmark" size={16} color={Colors.gold} />}
+                    {globalLanguage === lang.code && <Ionicons name="checkmark" size={16} color={Colors.gold} />}
                   </TouchableOpacity>
                 ))}
               </DarkCard>
@@ -209,7 +224,7 @@ export default function ProfileScreen() {
 
           {/* Account & Security */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>ACCOUNT & SECURITY</Text>
+            <Text style={styles.sectionTitle}>{t('profile_account_security')}</Text>
             <DarkCard padding={0}>
               {MENU_ITEMS.map((item, index) => (
                 <TouchableOpacity
@@ -232,7 +247,7 @@ export default function ProfileScreen() {
 
           {/* Save Button */}
           <GoldButton
-            label="Save Settings"
+            label={t('profile_save_settings')}
             icon="save-outline"
             onPress={saveSettings}
             style={styles.saveButton}
@@ -241,7 +256,7 @@ export default function ProfileScreen() {
           {/* Logout */}
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={18} color={Colors.error} />
-            <Text style={styles.logoutText}>Sign Out</Text>
+            <Text style={styles.logoutText}>{t('profile_sign_out')}</Text>
           </TouchableOpacity>
 
           {/* Footer */}

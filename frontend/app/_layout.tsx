@@ -3,24 +3,27 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
 import Colors from '../src/theme/colors';
+import { LanguageProvider } from '../src/contexts/LanguageContext';
 
 export default function RootLayout() {
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.black }}>
-      <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: Colors.black },
-          animation: 'fade',
-        }}
-      >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="onboarding" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="premium" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="scan-result" />
-      </Stack>
-    </View>
+    <LanguageProvider>
+      <View style={{ flex: 1, backgroundColor: Colors.black }}>
+        <StatusBar style="light" />
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: Colors.black },
+            animation: 'fade',
+          }}
+        >
+          <Stack.Screen name="index" />
+          <Stack.Screen name="onboarding" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="premium" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="scan-result" />
+        </Stack>
+      </View>
+    </LanguageProvider>
   );
 }
