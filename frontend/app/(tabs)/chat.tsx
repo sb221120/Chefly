@@ -20,7 +20,7 @@ import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../../src/theme/colors';
 import * as api from '../../src/services/api';
-import { useLanguage } from '../../src/contexts/LanguageContext';
+import { useLanguage, translations } from '../../src/i18n/i18n';
 
 // ============================================
 // 🎭 VOICE-TO-VOICE AI SOMMELIER
