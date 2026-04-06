@@ -19,7 +19,7 @@ import { DarkCard } from '../../src/components/DarkCard';
 import { GoldButton } from '../../src/components/GoldButton';
 import IMAGES from '../../src/constants/images';
 import * as api from '../../src/services/api';
-import { useLanguage } from '../../src/contexts/LanguageContext';
+import { Language, t } from '../../src/i18n/translations';
 
 const { width } = Dimensions.get('window');
 
@@ -37,7 +37,7 @@ const CURRENCIES = [
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { language: globalLanguage, setLanguage: setGlobalLanguage, t } = useLanguage();
+  const [currentLanguage, setCurrentLanguage] = useState<Language>('UK');
   const [currency, setCurrency] = useState('UAH');
   const [budget, setBudget] = useState(500);
   const [userId, setUserId] = useState<string | null>(null);
@@ -51,28 +51,28 @@ export default function ProfileScreen() {
       const id = await AsyncStorage.getItem('userId');
       setUserId(id);
       
+      // Load current language from AsyncStorage
+      const lang = await AsyncStorage.getItem('userLanguage');
+      if (lang) setCurrentLanguage(lang as Language);
+      
       if (id) {
         const user = await api.getUser(id);
         setCurrency(user.preferred_currency || 'UAH');
         setBudget(user.budget_limit || 500);
-        // Sync language from backend to context
-        if (user.preferred_language) {
-          await setGlobalLanguage(user.preferred_language as 'UK' | 'EN' | 'RU');
-        }
       }
     } catch (error) {
       console.error('Error loading user data:', error);
     }
   };
 
-  const handleLanguageChange = async (newLang: 'UK' | 'EN' | 'RU') => {
-    await setGlobalLanguage(newLang);
-    // Save immediately to backend
+  const handleLanguageChange = async (newLang: Language) => {
+    setCurrentLanguage(newLang);
+    // Save to AsyncStorage immediately (this triggers Tab re-render)
+    await AsyncStorage.setItem('userLanguage', newLang);
+    // Save to backend
     if (userId) {
       try {
-        await api.updateUser(userId, {
-          preferred_language: newLang,
-        });
+        await api.updateUser(userId, { preferred_language: newLang });
       } catch (error) {
         console.error('Error updating language:', error);
       }

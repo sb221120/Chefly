@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,56 +8,37 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
-  Dimensions,
 } from 'react-native';
-import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, CameraType } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../../src/theme/colors';
-import { GoldButton, GoldOutlineButton } from '../../src/components/GoldButton';
+import { GoldButton } from '../../src/components/GoldButton';
 import { DarkCard } from '../../src/components/DarkCard';
-import IMAGES from '../../src/constants/images';
 import * as api from '../../src/services/api';
-import { useLanguage } from '../../src/contexts/LanguageContext';
-
-const { width } = Dimensions.get('window');
-
-const SCAN_TIPS = [
-  { UK: 'Тримайте камеру стабільно для кращих результатів', EN: 'Hold camera steady for best results', RU: 'Держите камеру стабильно для лучших результатов' },
-  { UK: 'Забезпечте хороше освітлення', EN: 'Ensure good lighting conditions', RU: 'Обеспечьте хорошее освещение' },
-  { UK: 'Уникайте відблисків на склі', EN: 'Avoid reflections on glass', RU: 'Избегайте отблесков на стекле' },
-  { UK: 'Тримайте етикетку в центрі кадру', EN: 'Keep the label centered in frame', RU: 'Держите этикетку в центре кадра' },
-];
+import { Language, t } from '../../src/i18n/translations';
 
 export default function ScannerScreen() {
   const router = useRouter();
-  const { language, t } = useLanguage();
-  const [image, setImage] = useState<string | null>(null);
+  const [currentLanguage, setCurrentLanguage] = useState<Language>('UK');
+  const [permission, requestPermission] = useCameraPermissions();
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [budget, setBudget] = useState(500);
   const [currency, setCurrency] = useState('UAH');
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [showCamera, setShowCamera] = useState(false);
-  const cameraRef = useRef<Camera>(null);
+  const cameraRef = React.useRef<CameraView>(null);
 
   useEffect(() => {
-    loadUserPreferences();
-    requestCameraPermission();
+    loadLanguageAndPreferences();
   }, []);
 
-  const requestCameraPermission = async () => {
-    const { status } = await Camera.requestCameraPermissionsAsync();
-    setHasPermission(status === 'granted');
-    if (status === 'granted') {
-      setShowCamera(true);
-    }
-  };
-
-  const loadUserPreferences = async () => {
+  const loadLanguageAndPreferences = async () => {
     try {
+      const lang = await AsyncStorage.getItem('userLanguage');
+      if (lang) setCurrentLanguage(lang as Language);
+
       const userId = await AsyncStorage.getItem('userId');
       if (userId) {
         const user = await api.getUser(userId);
@@ -73,13 +54,12 @@ export default function ScannerScreen() {
     if (cameraRef.current) {
       try {
         const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.8 });
-        if (photo.base64) {
-          setImage(photo.base64);
-          setShowCamera(false);
+        if (photo?.base64) {
+          setCapturedImage(photo.base64);
         }
       } catch (error) {
         console.error('Camera error:', error);
-        Alert.alert(t('scanner_error'), t('scanner_error_message'));
+        Alert.alert(t('scanner_error', currentLanguage), t('scanner_error_message', currentLanguage));
       }
     }
   };
@@ -87,9 +67,8 @@ export default function ScannerScreen() {
   const pickFromGallery = async () => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
       if (!permissionResult.granted) {
-        Alert.alert(t('scanner_error'), t('scanner_permission_error'));
+        Alert.alert(t('scanner_error', currentLanguage), t('scanner_permission_error', currentLanguage));
         return;
       }
 
@@ -100,36 +79,27 @@ export default function ScannerScreen() {
       });
 
       if (!result.canceled && result.assets[0]?.base64) {
-        setImage(result.assets[0].base64);
-        setShowCamera(false);
+        setCapturedImage(result.assets[0].base64);
       }
     } catch (error) {
       console.error('Gallery picker error:', error);
-      Alert.alert(t('scanner_error'), t('scanner_error_message'));
     }
   };
 
   const analyzeShelf = async () => {
-    if (!image) return;
+    if (!capturedImage) return;
 
     try {
       setIsAnalyzing(true);
       const userId = await AsyncStorage.getItem('userId');
       
       if (!userId) {
-        Alert.alert(t('scanner_error'), t('scanner_user_not_found'));
+        Alert.alert(t('scanner_error', currentLanguage), t('scanner_user_not_found', currentLanguage));
         return;
       }
 
-      const result = await api.scanShelf(
-        userId,
-        image,
-        budget,
-        currency,
-        language
-      );
+      const result = await api.scanShelf(userId, capturedImage, budget, currency, currentLanguage);
 
-      // Navigate to results
       router.push({
         pathname: '/scan-result',
         params: {
@@ -140,12 +110,40 @@ export default function ScannerScreen() {
       });
     } catch (error) {
       console.error('Analysis error:', error);
-      Alert.alert(t('scanner_error'), t('scanner_error_message'));
+      Alert.alert(t('scanner_error', currentLanguage), t('scanner_error_message', currentLanguage));
     } finally {
       setIsAnalyzing(false);
     }
   };
 
+  // Permission not granted yet
+  if (!permission) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color={Colors.gold} />
+      </View>
+    );
+  }
+
+  // Permission denied - show grant button
+  if (!permission.granted) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.permissionContainer}>
+          <Ionicons name="camera-outline" size={80} color={Colors.gold} />
+          <Text style={styles.permissionTitle}>{t('scanner_grant_permission', currentLanguage)}</Text>
+          <Text style={styles.permissionText}>{t('scanner_permission_error', currentLanguage)}</Text>
+          <GoldButton
+            label={t('scanner_grant_permission', currentLanguage)}
+            icon="camera"
+            onPress={requestPermission}
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Camera granted - show camera or captured image
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -153,127 +151,98 @@ export default function ScannerScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={Colors.textSecondary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('scanner_title')}</Text>
+        <Text style={styles.headerTitle}>{t('scanner_title', currentLanguage)}</Text>
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Budget display */}
-        <View style={styles.budgetSection}>
-          <View>
-            <Text style={styles.budgetLabel}>{t('scanner_budget_label')}</Text>
-            <Text style={styles.budgetSubtext}>{t('scanner_budget_hint')}</Text>
-          </View>
-          <Text style={styles.budgetValue}>
-            {budget} {currency}
-          </Text>
-        </View>
+      {!capturedImage ? (
+        /* CAMERA VIEW - Main Background */
+        <View style={styles.cameraContainer}>
+          <CameraView
+            ref={cameraRef}
+            style={StyleSheet.absoluteFill}
+            facing="back"
+          />
+          
+          {/* Gallery Button - Top Right Absolute Position */}
+          <TouchableOpacity
+            style={styles.galleryButton}
+            onPress={pickFromGallery}
+          >
+            <Ionicons name="images" size={24} color={Colors.gold} />
+          </TouchableOpacity>
 
-        {/* Camera/Image preview area */}
-        <View style={styles.previewContainer}>
-          {showCamera && hasPermission && !image ? (
-            <View style={styles.cameraContainer}>
-              <Camera
-                ref={cameraRef}
-                style={styles.camera}
-                type={CameraType.back}
-              />
-              {/* Gallery icon button in corner */}
-              <TouchableOpacity
-                style={styles.galleryIconButton}
-                onPress={pickFromGallery}
-              >
-                <Ionicons name="images" size={24} color={Colors.gold} />
-              </TouchableOpacity>
-            </View>
-          ) : image ? (
-            <Image
-              source={{ uri: `data:image/jpeg;base64,${image}` }}
-              style={styles.previewImage}
-              contentFit="cover"
-            />
-          ) : (
-            <View style={styles.placeholderContainer}>
-              {/* Background wine shelf image */}
-              <Image
-                source={{ uri: IMAGES.wineShelf }}
-                style={styles.placeholderImage}
-                contentFit="cover"
-              />
-              <View style={styles.placeholderOverlay} />
-              
-              {/* Scanning target overlay */}
-              <View style={styles.scanTarget}>
-                <View style={styles.scanCrosshair}>
-                  <View style={[styles.scanLine, styles.scanLineH]} />
-                  <View style={[styles.scanLine, styles.scanLineV]} />
-                </View>
-              </View>
-              
-              <Text style={styles.placeholderText}>
-                {t('scanner_placeholder')}
-              </Text>
-            </View>
-          )}
-
-          {/* Corner brackets */}
+          {/* Corner Brackets */}
           <View style={[styles.corner, styles.topLeft]} />
           <View style={[styles.corner, styles.topRight]} />
           <View style={[styles.corner, styles.bottomLeft]} />
           <View style={[styles.corner, styles.bottomRight]} />
-        </View>
 
-        {/* Action buttons */}
-        {!image && showCamera && hasPermission ? (
-          <View style={styles.captureSection}>
-            <GoldButton
-              label={t('scanner_camera')}
-              icon="camera"
-              onPress={takePicture}
-            />
+          {/* Capture Button - Bottom Center */}
+          <View style={styles.captureButtonContainer}>
+            <TouchableOpacity style={styles.captureButton} onPress={takePicture}>
+              <View style={styles.captureButtonInner} />
+            </TouchableOpacity>
           </View>
-        ) : !image ? (
-          <View style={styles.actionButtons}>
-            <GoldButton
-              label={t('scanner_camera')}
-              icon="camera"
-              onPress={() => setShowCamera(true)}
-            />
+
+          {/* Budget Display - Top */}
+          <View style={styles.budgetOverlay}>
+            <Text style={styles.budgetLabel}>{t('scanner_budget_label', currentLanguage)}</Text>
+            <Text style={styles.budgetValue}>{budget} {currency}</Text>
           </View>
-        ) : (
+        </View>
+      ) : (
+        /* CAPTURED IMAGE VIEW */
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.budgetSection}>
+            <View>
+              <Text style={styles.budgetLabel}>{t('scanner_budget_label', currentLanguage)}</Text>
+              <Text style={styles.budgetSubtext}>{t('scanner_budget_hint', currentLanguage)}</Text>
+            </View>
+            <Text style={styles.budgetValue}>{budget} {currency}</Text>
+          </View>
+
+          <View style={styles.previewContainer}>
+            <img
+              src={`data:image/jpeg;base64,${capturedImage}`}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              alt="Captured"
+            />
+            <View style={[styles.corner, styles.topLeft]} />
+            <View style={[styles.corner, styles.topRight]} />
+            <View style={[styles.corner, styles.bottomLeft]} />
+            <View style={[styles.corner, styles.bottomRight]} />
+          </View>
+
           <View style={styles.analyzeButtons}>
             <GoldButton
-              label={isAnalyzing ? t('scanner_analyzing') : t('scanner_analyze')}
+              label={isAnalyzing ? t('scanner_analyzing', currentLanguage) : t('scanner_analyze', currentLanguage)}
               icon="sparkles"
               onPress={analyzeShelf}
               loading={isAnalyzing}
             />
             <TouchableOpacity
               style={styles.resetButton}
-              onPress={() => {
-                setImage(null);
-                setShowCamera(true);
-              }}
+              onPress={() => setCapturedImage(null)}
             >
-              <Text style={styles.resetText}>{t('scanner_reset')}</Text>
+              <Text style={styles.resetText}>{t('scanner_reset', currentLanguage)}</Text>
             </TouchableOpacity>
           </View>
-        )}
 
-        {/* Tips */}
-        <DarkCard style={styles.tipsCard}>
-          <View style={styles.tipsHeader}>
-            <Ionicons name="information-circle-outline" size={16} color={Colors.gold} />
-            <Text style={styles.tipsTitle}>{t('scanner_tips_title')}</Text>
-          </View>
-          {SCAN_TIPS.map((tip, index) => (
-            <View key={index} style={styles.tipRow}>
-              <View style={styles.tipDot} />
-              <Text style={styles.tipText}>{tip[language as 'UK' | 'EN' | 'RU']}</Text>
+          <DarkCard style={styles.tipsCard}>
+            <View style={styles.tipsHeader}>
+              <Ionicons name="information-circle-outline" size={16} color={Colors.gold} />
+              <Text style={styles.tipsTitle}>{t('scanner_tips_title', currentLanguage)}</Text>
             </View>
-          ))}
-        </DarkCard>
-      </ScrollView>
+            {[1, 2, 3, 4].map((i) => (
+              <View key={i} style={styles.tipRow}>
+                <View style={styles.tipDot} />
+                <Text style={styles.tipText}>{t(`scanner_tip_${i}` as any, currentLanguage)}</Text>
+              </View>
+            ))}
+          </DarkCard>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -283,11 +252,31 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.black,
   },
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  permissionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  permissionText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 32,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
+    zIndex: 10,
   },
   headerTitle: {
     fontSize: 13,
@@ -295,9 +284,34 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     letterSpacing: 2,
   },
-  content: {
+  cameraContainer: {
     flex: 1,
-    padding: 20,
+    position: 'relative',
+  },
+  galleryButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.gold,
+    zIndex: 100,
+  },
+  budgetOverlay: {
+    position: 'absolute',
+    top: 80,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.gold,
   },
   budgetSection: {
     flexDirection: 'row',
@@ -327,124 +341,72 @@ const styles = StyleSheet.create({
     color: Colors.gold,
     fontFamily: 'Georgia',
   },
+  corner: {
+    position: 'absolute',
+    width: 30,
+    height: 30,
+    borderColor: Colors.gold,
+    zIndex: 50,
+  },
+  topLeft: {
+    top: 150,
+    left: 20,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+  },
+  topRight: {
+    top: 150,
+    right: 20,
+    borderTopWidth: 3,
+    borderRightWidth: 3,
+  },
+  bottomLeft: {
+    bottom: 120,
+    left: 20,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+  },
+  bottomRight: {
+    bottom: 120,
+    right: 20,
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+  },
+  captureButtonContainer: {
+    position: 'absolute',
+    bottom: 40,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  captureButton: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: Colors.gold,
+  },
+  captureButtonInner: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: Colors.gold,
+  },
+  content: {
+    flex: 1,
+    padding: 20,
+  },
   previewContainer: {
     aspectRatio: 3 / 4,
     backgroundColor: Colors.surface,
     borderRadius: 16,
     overflow: 'hidden',
     marginBottom: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cameraContainer: {
-    width: '100%',
-    height: '100%',
     position: 'relative',
-  },
-  camera: {
-    width: '100%',
-    height: '100%',
-  },
-  galleryIconButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: Colors.gold,
-  },
-  previewImage: {
-    width: '100%',
-    height: '100%',
-  },
-  placeholderContainer: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  placeholderImage: {
-    ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
-  },
-  placeholderOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-  },
-  scanTarget: {
-    width: 60,
-    height: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  scanCrosshair: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scanLine: {
-    position: 'absolute',
-    backgroundColor: Colors.gold,
-  },
-  scanLineH: {
-    width: 40,
-    height: 1.5,
-  },
-  scanLineV: {
-    width: 1.5,
-    height: 40,
-  },
-  placeholderText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    zIndex: 1,
-    fontWeight: '500',
-  },
-  corner: {
-    position: 'absolute',
-    width: 28,
-    height: 28,
-    borderColor: Colors.gold,
-  },
-  topLeft: {
-    top: 20,
-    left: 20,
-    borderTopWidth: 2.5,
-    borderLeftWidth: 2.5,
-  },
-  topRight: {
-    top: 20,
-    right: 20,
-    borderTopWidth: 2.5,
-    borderRightWidth: 2.5,
-  },
-  bottomLeft: {
-    bottom: 20,
-    left: 20,
-    borderBottomWidth: 2.5,
-    borderLeftWidth: 2.5,
-  },
-  bottomRight: {
-    bottom: 20,
-    right: 20,
-    borderBottomWidth: 2.5,
-    borderRightWidth: 2.5,
-  },
-  captureSection: {
-    marginBottom: 20,
-  },
-  actionButtons: {
-    marginBottom: 20,
-  },
-  actionButton: {
-    flex: 1,
   },
   analyzeButtons: {
     marginBottom: 20,
@@ -487,5 +449,6 @@ const styles = StyleSheet.create({
   tipText: {
     fontSize: 13,
     color: Colors.textSecondary,
+    flex: 1,
   },
 });
