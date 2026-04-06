@@ -6,10 +6,10 @@ import {
   SafeAreaView,
   ScrollView,
   TouchableOpacity,
-  Switch,
   Alert,
   Dimensions,
 } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,19 +35,11 @@ const CURRENCIES = [
   { code: 'EUR', symbol: '€' },
 ];
 
-const MENU_ITEMS = [
-  { icon: 'scan-outline', title: 'Scan History', subtitle: 'View your previous recommendations', route: '/(tabs)/history' },
-  { icon: 'notifications-outline', title: 'Notifications', subtitle: 'Daily pairing tips & alerts', route: null },
-  { icon: 'shield-outline', title: 'Privacy & Security', subtitle: 'Manage your data and personal', route: null },
-  { icon: 'help-circle-outline', title: 'Support', subtitle: 'Contact your personal concierge', route: null },
-];
-
 export default function ProfileScreen() {
   const router = useRouter();
   const { language: globalLanguage, setLanguage: setGlobalLanguage, t } = useLanguage();
   const [currency, setCurrency] = useState('UAH');
   const [budget, setBudget] = useState(500);
-  const [notifications, setNotifications] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -75,6 +67,36 @@ export default function ProfileScreen() {
 
   const handleLanguageChange = async (newLang: 'UK' | 'EN' | 'RU') => {
     await setGlobalLanguage(newLang);
+    // Save immediately to backend
+    if (userId) {
+      try {
+        await api.updateUser(userId, {
+          preferred_language: newLang,
+        });
+      } catch (error) {
+        console.error('Error updating language:', error);
+      }
+    }
+  };
+
+  const handleBudgetChange = (value: number) => {
+    setBudget(Math.round(value));
+  };
+
+  const handleBudgetSlidingComplete = async (value: number) => {
+    const roundedBudget = Math.round(value);
+    setBudget(roundedBudget);
+    // Save to AsyncStorage and backend
+    await AsyncStorage.setItem('userBudget', roundedBudget.toString());
+    if (userId) {
+      try {
+        await api.updateUser(userId, {
+          budget_limit: roundedBudget,
+        });
+      } catch (error) {
+        console.error('Error updating budget:', error);
+      }
+    }
   };
 
   const saveSettings = async () => {
@@ -158,7 +180,7 @@ export default function ProfileScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('profile_preferences')}</Text>
             
-            {/* Default Budget */}
+            {/* Default Budget with REAL Slider */}
             <DarkCard padding={16} style={styles.card}>
               <View style={styles.budgetHeader}>
                 <Text style={styles.budgetLabel}>{t('profile_budget_label')}</Text>
@@ -166,13 +188,21 @@ export default function ProfileScreen() {
                   {budget} {CURRENCIES.find(c => c.code === currency)?.symbol}
                 </Text>
               </View>
-              <View style={styles.budgetSlider}>
-                <Text style={styles.sliderMin}>0</Text>
-                <View style={styles.sliderTrack}>
-                  <View style={[styles.sliderFill, { width: `${Math.min((budget / 2000) * 100, 100)}%` }]} />
-                  <View style={[styles.sliderThumb, { left: `${Math.min((budget / 2000) * 100, 100)}%` }]} />
-                </View>
-                <Text style={styles.sliderMax}>$1,000+</Text>
+              <Slider
+                style={styles.slider}
+                minimumValue={100}
+                maximumValue={2000}
+                step={50}
+                value={budget}
+                onValueChange={handleBudgetChange}
+                onSlidingComplete={handleBudgetSlidingComplete}
+                minimumTrackTintColor={Colors.gold}
+                maximumTrackTintColor={Colors.border}
+                thumbTintColor={Colors.gold}
+              />
+              <View style={styles.sliderLabels}>
+                <Text style={styles.sliderLabelText}>100</Text>
+                <Text style={styles.sliderLabelText}>2000+</Text>
               </View>
               <Text style={styles.budgetHint}>{t('profile_budget_hint')}</Text>
             </DarkCard>
@@ -388,48 +418,24 @@ const styles = StyleSheet.create({
     color: Colors.gold,
     fontFamily: 'Georgia',
   },
-  budgetSlider: {
+  slider: {
+    width: '100%',
+    height: 40,
+  },
+  sliderLabels: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 8,
+    justifyContent: 'space-between',
+    marginTop: -8,
   },
-  sliderMin: {
+  sliderLabelText: {
     fontSize: 11,
     color: Colors.textMuted,
-  },
-  sliderMax: {
-    fontSize: 11,
-    color: Colors.textMuted,
-  },
-  sliderTrack: {
-    flex: 1,
-    height: 4,
-    backgroundColor: Colors.border,
-    borderRadius: 2,
-    position: 'relative',
-  },
-  sliderFill: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    height: 4,
-    backgroundColor: Colors.gold,
-    borderRadius: 2,
-  },
-  sliderThumb: {
-    position: 'absolute',
-    top: -6,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: Colors.gold,
-    marginLeft: -8,
   },
   budgetHint: {
     fontSize: 11,
     color: Colors.textMuted,
     fontStyle: 'italic',
+    marginTop: 8,
   },
   rowSection: {
     flexDirection: 'row',
