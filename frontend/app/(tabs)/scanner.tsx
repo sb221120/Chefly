@@ -18,7 +18,7 @@ import Colors from '../../src/theme/colors';
 import { GoldButton } from '../../src/components/GoldButton';
 import { DarkCard } from '../../src/components/DarkCard';
 import * as api from '../../src/services/api';
-import { Language, t } from '../../src/i18n/translations';
+import { Language, useLanguage, translations } from '../../src/i18n/i18n';
 
 export default function ScannerScreen() {
   const router = useRouter();
